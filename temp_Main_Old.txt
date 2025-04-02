@@ -1,0 +1,228 @@
+BLOCK Beginning_of_TDM_E2E_Flow
+ON BLOCK ERROR
+
+END
+    BLOCK 'Close all TDM open application'
+ON BLOCK ERROR
+
+END
+        CALL CloseExistingOpenApplications
+    END
+    BLOCK 'Update TDM Variable'
+ON BLOCK ERROR
+
+END
+        System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''USERNAME''' Value=> machineUser
+        SET userPath TO $'''D:\\Users\\%machineUser%'''
+        SET screenshotPath TO $'''%userPath%\\screenshots'''
+    END
+    BLOCK 'Retrieve Jenkins build number'
+ON BLOCK ERROR
+
+END
+        File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\Jenkins_BuildNumber.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> buildNumber
+        IF (Folder.IfFolderExists.Exists Path: $'''%screenshotPath%\\%buildNumber%''') THEN
+            Folder.Delete Folder: $'''%screenshotPath%\\%buildNumber%'''
+        END
+        Folder.Create FolderPath: screenshotPath FolderName: buildNumber Folder=> BuildFolder
+    END
+    BLOCK 'Launch and read Excel'
+ON BLOCK ERROR
+
+END
+        Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''D:\\Users\\%machineUser%\\Jenkins_Workspace\\PowerAutomateScripts\\TDM_Flow_Data.xlsx''' Visible: False ReadOnly: False Instance=> tdmFlowData
+        Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: tdmFlowData Name: $'''TDM_DATA'''
+        Excel.ReadFromExcel.ReadAllCells Instance: tdmFlowData ReadAsText: True FirstLineIsHeader: True RangeValue=> tdmExcelData
+        Excel.CloseExcel.Close Instance: tdmFlowData
+    END
+    BLOCK 'Login Mainframe only'
+ON BLOCK ERROR
+
+END
+        CALL 'Set Excel Global Variable'
+    END
+    BLOCK 'Login Mainframe only'
+ON BLOCK ERROR
+
+END
+        CALL Mainframe_Login_Flow
+    END
+    BLOCK 'Login Mainframe only'
+ON BLOCK ERROR
+
+END
+        CALL Open_Mainframe_CICS_Window
+    END
+    BLOCK 'CICS Date Update Flow'
+ON BLOCK ERROR
+
+END
+        SET rowNumber TO 0
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                IF CurrentRow['cicsDateUpdateFlag'] = $'''Y''' THEN
+                    CALL 'Read Excel CICS Date Param'
+                    CALL CICS_Date_Update
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''CICSStatusComments''' RowIndex: rowNumber Value: CICSStatusComments
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''CICSStatusValue''' RowIndex: rowNumber Value: CICSStatusValue
+                END
+            END
+        END
+    END
+    BLOCK 'Login Mainframe only'
+ON BLOCK ERROR
+
+END
+        CALL Close_Mainframe_CICS_Window
+    END
+    LOOP FOREACH CurrentRow IN tdmExcelData
+        IF CurrentRow['TCFlag'] = $'''Y''' THEN
+            SET SSYSERID TO CurrentRow['SSYSERID']
+            Folder.Create FolderPath: BuildFolder.FullName FolderName: $'''%rowNumber%_%SSYSERID%''' Folder=> rowNumberFolder
+            SET logFilePath TO $'''%rowNumberFolder.FullName%\\%rowNumber%_%SSYSERID%_Logs.txt'''
+            IF (File.IfFile.Exists File: logFilePath) THEN
+                File.Delete Files: logFilePath
+            END
+            File.WriteText File: logFilePath TextToWrite: $'''TDM Flow Execution Started
+********************************************************************************''' AppendNewLine: True IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.UTF8
+            SET screenshotPath TO rowNumberFolder.FullName
+            SET racfUsername TO CurrentRow['RACFUSERID']
+            File.ConvertFromBase64 Base64Text: CurrentRow['RACFBASE64PASSWORD'] File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' IfFileExists: File.IfExists.Overwrite
+            File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> racfPassword
+            File.Delete Files: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt'''
+            SET encryptedPassword TO CurrentRow['RACFBASE64PASSWORD']
+            SET DatabaseName TO CurrentRow['dataBaseName']
+            SET extractId TO CurrentRow['extractId']
+            SET releaseFilter TO CurrentRow['releaseFilter']
+            SET SourceDatabase TO CurrentRow['sourceDatabase']
+            Text.GetSubtext.GetSubtextFromStartTo Text: SourceDatabase NumberOfChars: 8 Subtext=> db2SourceDatabase
+            SET targetDatabaseName TO CurrentRow['targetDatabase']
+            SET environmentName TO CurrentRow['environmentName']
+            SET personInternalIds TO $'''\'%CurrentRow['personalInternalIds']%'''
+            SET USERNAME TO CurrentRow['USERNAME']
+            SET USERBSCNM TO CurrentRow['USERBSCNM']
+            SET SRCDB TO CurrentRow['SRCDB']
+            Text.GetSubtext.GetSubtextFromStartTo Text: SRCDB NumberOfChars: 2 Subtext=> SRCSS
+            SET SRCSS TO $'''DB%SRCSS%'''
+            SET TRGTDB TO CurrentRow['TRGTDB']
+            Text.GetSubtext.GetSubtextFromStartTo Text: TRGTDB NumberOfChars: 2 Subtext=> TRGTSS
+            SET TRGTSS TO $'''DB%TRGTSS%'''
+            SET CMPODB TO CurrentRow['CMPODB']
+            Text.GetSubtext.GetSubtextFromStartTo Text: CMPODB NumberOfChars: 2 Subtext=> CMPOSS
+            SET CMPOSS TO $'''DB%CMPOSS%'''
+            SET SSYSERNM TO CurrentRow['SSYSERNM']
+            SET TBARLSID TO CurrentRow['TBARLSID']
+            SET LOBCD TO CurrentRow['LOBCD']
+            SET TRGTRLSE TO CurrentRow['TRGTRLSE']
+            SET DBLIFECYCLE TO CurrentRow['DBLIFECYCLE']
+            SET TRGTDBLIFECYCCD TO CurrentRow['TRGTDBLIFECYCCD']
+            SET CMPOLIFECYCCD TO CurrentRow['CMPOLIFECYCCD']
+            SET CTRYCD TO CurrentRow['CTRYCD']
+            SET HALANID TO CurrentRow['HALANID']
+            SET SUBTRANS TO CurrentRow['TransSubSys']
+            SET UserId TO CurrentRow['UserId']
+            SET SystemDate TO CurrentRow['SystemDate']
+            SET catalystClientName TO CurrentRow['catalystClientName']
+            SET catalystTrans TO CurrentRow['catalystTrans']
+            SET catalystTestPlanName TO CurrentRow['catalystTestPlanName']
+            IF Contains($'''P0095''', SSYSERID, True) THEN
+                SET purgeDBBatchArgs TO $'''/USERNAME=\"%USERNAME%\" /USERBSCNM=\"%USERBSCNM%\" /USERID=%racfUsername% /PW=%encryptedPassword% /TESTCLIENT=Y /SRCDB=%SRCDB% /SRCSS=%SRCSS% /TRGTDB=%TRGTDB% /TRGTSS=%TRGTSS% /SSYSERID=%SSYSERID% /SSYSERNM=\"%SSYSERNM%\" /SSYSSS=DBQ7 /SSYSDB=Q7WKBNCH /WBPRVSDB=Q7WKBNCH /CMPOSS=%CMPOSS% /CMPODB=%CMPODB% /CMPOLIFECYCCD=%CMPOLIFECYCCD% /TBARLSID=%TBARLSID% /LOBCD=%LOBCD% /TRGTRLSE=%TRGTRLSE% /TRGTDBLIFECYCCD=%TRGTDBLIFECYCCD% /CTRYCD=%CTRYCD% /DBLIFECYCLE=%DBLIFECYCLE% /HALANID=%HALANID% /CLIENTREADONLY=0 /WBVERSION=\"PRD-9.03.00\" /EMCLIENTID=\"\" /SPLITIND= /SSYSWBID=1 /ADMIN=0 APPL_NM=RPTLNCH TITLE=\"Adhoc Batch Utilities\" DISPLAY_OUTPUT=N MULTI_JOBS=Y   PIPENAME=WorkbenchApp PIPEKEY=38705555.115350'''
+                SET migrationDBBatchArgs TO $'''/USERNAME=\"%USERNAME%\" /USERBSCNM=\"%USERBSCNM%\" /USERID=%racfUsername% /PW=%encryptedPassword% /TESTCLIENT=Y /SRCDB=%SRCDB% /SRCSS=%SRCSS% /TRGTDB=%TRGTDB% /TRGTSS=%TRGTSS% /SSYSERID=%SSYSERID% /SSYSERNM=\"%SSYSERNM%\" /SSYSSS=DBQ7 /SSYSDB=Q7WKBNCH /WBPRVSDB=Q7WKBNCH /CMPOSS=%CMPOSS% /CMPODB=%CMPODB% /CMPOLIFECYCCD=%CMPOLIFECYCCD% /TBARLSID=%TBARLSID% /LOBCD=%LOBCD% /TRGTRLSE=%TRGTRLSE% /TRGTDBLIFECYCCD=%TRGTDBLIFECYCCD% /CTRYCD=%CTRYCD% /DBLIFECYCLE=%DBLIFECYCLE% /HALANID=%HALANID% /CLIENTREADONLY=0 /WBVERSION=\"PRD-9.03.00\" /EMCLIENTID=\"\" /SPLITIND= /SSYSWBID=1 /ADMIN=0 TITLE=\"Partial Migrations\" JOB_NM=GNRCMGRT  DISPLAY_OUTPUT=N MULTI_JOBS=N AUTO_SUBMIT=N   PIPENAME=WorkbenchApp PIPEKEY=18100.904841'''
+                SET pdmBatchArgs TO $'''/USERNAME=\"%USERNAME%\" /USERBSCNM=\"%USERBSCNM%\" /USERID=%racfUsername% /PW=%encryptedPassword% /TESTCLIENT=Y /SRCDB=%SRCDB% /SRCSS=%SRCSS% /TRGTDB=%TRGTDB% /TRGTSS=%TRGTSS% /SSYSERID=%SSYSERID% /SSYSERNM=\"%SSYSERNM%\" /SSYSSS=DBQ7 /SSYSDB=Q7WKBNCH /WBPRVSDB=Q7WKBNCH /CMPOSS=%CMPOSS% /CMPODB=%CMPODB% /CMPOLIFECYCCD=%CMPOLIFECYCCD% /TBARLSID=%TBARLSID% /LOBCD=%LOBCD% /TRGTRLSE=%TRGTRLSE% /TRGTDBLIFECYCCD=%TRGTDBLIFECYCCD% /CTRYCD=%CTRYCD% /DBLIFECYCLE=%DBLIFECYCLE% /HALANID=%HALANID% /CLIENTREADONLY=0 /WBVERSION=\"PRD-9.03.00\" /EMCLIENTID=\"\" /SPLITIND= /SSYSWBID=1 /ADMIN=0    PIPENAME=WorkbenchApp PIPEKEY=38706340.903170'''
+                SET udpSyncBatchArgs TO $'''USERNAME=\"%USERNAME%\" /USERBSCNM=\"%USERBSCNM%\" /USERID=%racfUsername% /PW=%encryptedPassword% /TESTCLIENT=Y /SRCDB=%SRCDB% /SRCSS=%SRCSS% /TRGTDB=%TRGTDB% /TRGTSS=%TRGTSS% /SSYSERID=%SSYSERID% /SSYSERNM=\"%SSYSERNM%\" /SSYSSS=DBQ7 /SSYSDB=Q7WKBNCH /WBPRVSDB=Q7WKBNCH /CMPOSS=%CMPOSS% /CMPODB=%CMPODB% /CMPOLIFECYCCD=%CMPOLIFECYCCD% /TBARLSID=%TBARLSID% /LOBCD=%LOBCD% /TRGTRLSE=%TRGTRLSE% /TRGTDBLIFECYCCD=%TRGTDBLIFECYCCD% /CTRYCD=%CTRYCD% /DBLIFECYCLE=%DBLIFECYCLE% /HALANID=%HALANID% /CLIENTREADONLY=0 /WBVERSION=\"PRD-9.03.00\" /EMCLIENTID=\"\" /SPLITIND= /SSYSWBID=1 /ADMIN=0 TMPL_NM=JOBC and MULTI_JOBS=Y   PIPENAME=WorkbenchApp PIPEKEY=61010.900790'''
+            ELSE
+                SET purgeDBBatchArgs TO $'''/USERNAME=\"%USERNAME%\" /USERBSCNM=\"%USERBSCNM%\" /USERID=%racfUsername% /PW=%encryptedPassword% /SRCDB=%SRCDB% /SRCSS=%SRCSS% /TRGTDB=%TRGTDB% /TRGTSS=%TRGTSS% /SSYSERID=%SSYSERID% /SSYSERNM=\"%SSYSERNM%\" /SSYSSS=DBQ7 /SSYSDB=Q7WKBNCH /WBPRVSDB=Q7WKBNCH /CMPOSS=%CMPOSS% /CMPODB=%CMPODB% /CMPOLIFECYCCD=%CMPOLIFECYCCD% /TBARLSID=%TBARLSID% /LOBCD=%LOBCD% /TRGTRLSE=%TRGTRLSE% /TRGTDBLIFECYCCD=%TRGTDBLIFECYCCD% /CTRYCD=%CTRYCD% /DBLIFECYCLE=%DBLIFECYCLE% /HALANID=%HALANID% /CLIENTREADONLY=0 /WBVERSION=\"PRD-9.03.00\" /EMCLIENTID=\"\" /SPLITIND= /SSYSWBID=1 /ADMIN=0 APPL_NM=RPTLNCH TITLE=\"Adhoc Batch Utilities\" DISPLAY_OUTPUT=N MULTI_JOBS=Y   PIPENAME=WorkbenchApp PIPEKEY=38705555.115350'''
+                SET migrationDBBatchArgs TO $'''/USERNAME=\"%USERNAME%\" /USERBSCNM=\"%USERBSCNM%\" /USERID=%racfUsername% /PW=%encryptedPassword% /SRCDB=%SRCDB% /SRCSS=%SRCSS% /TRGTDB=%TRGTDB% /TRGTSS=%TRGTSS% /SSYSERID=%SSYSERID% /SSYSERNM=\"%SSYSERNM%\" /SSYSSS=DBQ7 /SSYSDB=Q7WKBNCH /WBPRVSDB=Q7WKBNCH /CMPOSS=%CMPOSS% /CMPODB=%CMPODB% /CMPOLIFECYCCD=%CMPOLIFECYCCD% /TBARLSID=%TBARLSID% /LOBCD=%LOBCD% /TRGTRLSE=%TRGTRLSE% /TRGTDBLIFECYCCD=%TRGTDBLIFECYCCD% /CTRYCD=%CTRYCD% /DBLIFECYCLE=%DBLIFECYCLE% /HALANID=%HALANID% /CLIENTREADONLY=0 /WBVERSION=\"PRD-9.03.00\" /EMCLIENTID=\"\" /SPLITIND= /SSYSWBID=1 /ADMIN=0 TITLE=\"Partial Migrations\" JOB_NM=GNRCMGRT  DISPLAY_OUTPUT=N MULTI_JOBS=N AUTO_SUBMIT=N   PIPENAME=WorkbenchApp PIPEKEY=18100.904841'''
+                SET pdmBatchArgs TO $'''/USERNAME=\"%USERNAME%\" /USERBSCNM=\"%USERBSCNM%\" /USERID=%racfUsername% /PW=%encryptedPassword% /SRCDB=%SRCDB% /SRCSS=%SRCSS% /TRGTDB=%TRGTDB% /TRGTSS=%TRGTSS% /SSYSERID=%SSYSERID% /SSYSERNM=\"%SSYSERNM%\" /SSYSSS=DBQ7 /SSYSDB=Q7WKBNCH /WBPRVSDB=Q7WKBNCH /CMPOSS=%CMPOSS% /CMPODB=%CMPODB% /CMPOLIFECYCCD=%CMPOLIFECYCCD% /TBARLSID=%TBARLSID% /LOBCD=%LOBCD% /TRGTRLSE=%TRGTRLSE% /TRGTDBLIFECYCCD=%TRGTDBLIFECYCCD% /CTRYCD=%CTRYCD% /DBLIFECYCLE=%DBLIFECYCLE% /HALANID=%HALANID% /CLIENTREADONLY=0 /WBVERSION=\"PRD-9.03.00\" /EMCLIENTID=\"\" /SPLITIND= /SSYSWBID=1 /ADMIN=0    PIPENAME=WorkbenchApp PIPEKEY=38706340.903170'''
+                SET udpSyncBatchArgs TO $'''USERNAME=\"%USERNAME%\" /USERBSCNM=\"%USERBSCNM%\" /USERID=%racfUsername% /PW=%encryptedPassword% /SRCDB=%SRCDB% /SRCSS=%SRCSS% /TRGTDB=%TRGTDB% /TRGTSS=%TRGTSS% /SSYSERID=%SSYSERID% /SSYSERNM=\"%SSYSERNM%\" /SSYSSS=DBQ7 /SSYSDB=Q7WKBNCH /WBPRVSDB=Q7WKBNCH /CMPOSS=%CMPOSS% /CMPODB=%CMPODB% /CMPOLIFECYCCD=%CMPOLIFECYCCD% /TBARLSID=%TBARLSID% /LOBCD=%LOBCD% /TRGTRLSE=%TRGTRLSE% /TRGTDBLIFECYCCD=%TRGTDBLIFECYCCD% /CTRYCD=%CTRYCD% /DBLIFECYCLE=%DBLIFECYCLE% /HALANID=%HALANID% /CLIENTREADONLY=0 /WBVERSION=\"PRD-9.03.00\" /EMCLIENTID=\"\" /SPLITIND= /SSYSWBID=1 /ADMIN=0 TMPL_NM=JOBC and MULTI_JOBS=Y   PIPENAME=WorkbenchApp PIPEKEY=61010.900790'''
+            END
+            BLOCK 'Beginning of TDM Process'
+ON BLOCK ERROR all
+
+END
+                DISABLE IF CurrentRow['purgeDBFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_PurgeDeflateUtility'
+DISABLE External.RunFlow FlowId: 'b61b11fd-2c09-ef11-9f8a-000d3a1a0e4c' @purgeDBBatchArgs: purgeDBBatchArgs @DatabaseName: DatabaseName @screenshotPath: screenshotPath @racfUsername: racfUsername @racfPassword: racfPassword @userPath: userPath @machineUser: machineUser @logFilePath: logFilePath @JobName=> JobName @JobId=> JobId @JobStatus=> JobStatus
+                    DISABLE Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''purgeDBJobDetails''' RowIndex: rowNumber Value: $'''Job Name: %JobName% and Job Id: %JobId%'''
+                    DISABLE Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''purgeDBMainframeStatus''' RowIndex: rowNumber Value: $'''Status: %JobStatus%'''
+                DISABLE END
+                DISABLE IF CurrentRow['migrationFPFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_DatabaseMigrationUtility'
+DISABLE External.RunFlow FlowId: 'f3fb7e1d-a10b-ef11-9f89-00224829decb' @logFilePath: logFilePath @migrationDBBatchArgs: migrationDBBatchArgs @releaseFilter: releaseFilter @SourceDatabase: SourceDatabase @targetDatabaseName: targetDatabaseName @racfUsername: racfUsername @racfPassword: racfPassword @DatabaseName: DatabaseName @screenshotPath: screenshotPath @machineUser: machineUser @userPath: userPath @MigrationOption: $'''Full provisions (non-runtime)''' @flowCode: $'''FP''' @JobId=> JobId2 @JobName=> JobName2 @JobStatus=> JobStatus2
+                    DISABLE Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''migrationFPJobDetails''' RowIndex: rowNumber Value: $'''Job Name: %JobName2% and Job Id: %JobId2%'''
+                    DISABLE Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''migrationFPMainframeStatus''' RowIndex: rowNumber Value: $'''Status: %JobStatus2%'''
+                DISABLE END
+                DISABLE IF CurrentRow['migrationRTFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_DatabaseMigrationUtility'
+DISABLE External.RunFlow FlowId: 'f3fb7e1d-a10b-ef11-9f89-00224829decb' @logFilePath: logFilePath @migrationDBBatchArgs: migrationDBBatchArgs @releaseFilter: releaseFilter @SourceDatabase: SourceDatabase @targetDatabaseName: targetDatabaseName @racfUsername: racfUsername @racfPassword: racfPassword @DatabaseName: DatabaseName @screenshotPath: screenshotPath @machineUser: machineUser @userPath: userPath @MigrationOption: $'''Runtime tables''' @flowCode: $'''RT''' @JobId=> JobId3 @JobName=> JobName3 @JobStatus=> JobStatus3
+                    DISABLE Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''migrationRTJobDetails''' RowIndex: rowNumber Value: $'''Job Name: %JobName3% and Job Id: %JobId3%'''
+                    DISABLE Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''migrationRTMainframeStatus''' RowIndex: rowNumber Value: $'''Status: %JobStatus3%'''
+                DISABLE END
+                IF CurrentRow['pdmExtractFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_PDMExtractInsertion'
+External.RunFlow FlowId: '86da9a22-310c-ef11-9f89-00224829decb' @logFilePath: logFilePath @pdmBatchArgs: pdmBatchArgs @DatabaseName: DatabaseName @userPath: userPath @screenshotPath: screenshotPath @racfUsername: racfUsername @racfPassword: racfPassword @extractId: extractId @machineUser: machineUser @JobName=> JobName4 @JobId=> JobId4 @JobStatus=> JobStatus4
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''pdmExtractJobDetails''' RowIndex: rowNumber Value: $'''Job Name: %JobName4% and Job Id: %JobId4%'''
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''pdmExtractMainframeStatus''' RowIndex: rowNumber Value: $'''Status: %JobStatus4%'''
+                END
+                IF CurrentRow['InternalIdsInsertionFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_AddInternalIdsInATE'
+External.RunFlow FlowId: '7cd99486-5a0c-ef11-9f89-00224829decb' @logFilePath: logFilePath @DatabaseName: DatabaseName @racfUsername: racfUsername @racfPassword: racfPassword @personInternalIds: personInternalIds @screenshotPath: screenshotPath @userPath: userPath @machineUser: machineUser @InternalIdsInsertionStatus=> InternalIdsInsertionStatus
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''InternalIdsInsertionStatus''' RowIndex: rowNumber Value: InternalIdsInsertionStatus
+                END
+                IF CurrentRow['udpSync9AtFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_UDPSyncJob'
+External.RunFlow FlowId: '77dc3d2e-680c-ef11-9f89-00224829decb' @logFilePath: logFilePath @userPath: userPath @screenshotPath: screenshotPath @SyncJobName: $'''BASNDVR.T.V4.JCLLIB(TCXXXX9@)''' @flowName: $'''UDPSync_9At''' @machineUser: machineUser @udpSyncBatchArgs: udpSyncBatchArgs @environmentName: environmentName @jobCode: $'''9@''' @racfUsername: racfUsername @racfPassword: racfPassword @JobName=> JobName5 @JobId=> JobId5 @JobStatus=> JobStatus5
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9AtJobDetails''' RowIndex: rowNumber Value: $'''Job Name: %JobName5% and Job Id: %JobId5%'''
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9AtMainframeStatus''' RowIndex: rowNumber Value: $'''Status: %JobStatus5%'''
+                END
+                IF CurrentRow['udpSync9PFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_UDPSyncJob'
+DISABLE External.RunFlow FlowId: '77dc3d2e-680c-ef11-9f89-00224829decb' @logFilePath: logFilePath @userPath: userPath @screenshotPath: screenshotPath @SyncJobName: $'''BASNDVR.T.V4.JCLLIB(TCXXXX9P)''' @flowName: $'''UDPSync_9P''' @machineUser: machineUser @udpSyncBatchArgs: udpSyncBatchArgs @environmentName: environmentName @jobCode: $'''9P''' @racfUsername: racfUsername @racfPassword: racfPassword @JobName=> JobName6 @JobId=> JobId6 @JobStatus=> JobStatus6
+                    @@flowname: 'New_TDM_UDPSyncJob'
+External.RunFlow FlowId: 'decdfd73-ccfd-ef11-bae3-0022482f617a' WaitToComplete: True @logFilePath: logFilePath @userPath: userPath @screenshotPath: screenshotPath @SyncJobName: $'''BASNDVR.T.V4.JCLLIB(TCXXXX9@)''' @flowName: $'''UDPSync_9At''' @machineUser: machineUser @udpSyncBatchArgs: udpSyncBatchArgs @environmentName: environmentName @jobCode: $'''9@''' @racfUsername: racfUsername @racfPassword: racfPassword @JobName=> JobName5 @JobId=> JobId5 @JobStatus=> JobStatus5 @LastError=> LastError_9At
+                    DISABLE Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9PJobDetails''' RowIndex: rowNumber Value: $'''Job Name: %JobName6% and Job Id: %JobId6%'''
+                    DISABLE Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9PMainframeStatus''' RowIndex: rowNumber Value: $'''Status: %JobStatus6%'''
+                END
+                IF CurrentRow['udpSync9QFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_UDPSyncJob'
+External.RunFlow FlowId: '77dc3d2e-680c-ef11-9f89-00224829decb' @logFilePath: logFilePath @userPath: userPath @screenshotPath: screenshotPath @SyncJobName: $'''BASNDVR.T.V4.JCLLIB(TCXXXX9Q)''' @flowName: $'''UDPSync_9Q''' @machineUser: machineUser @udpSyncBatchArgs: udpSyncBatchArgs @environmentName: environmentName @jobCode: $'''9Q''' @racfUsername: racfUsername @racfPassword: racfPassword @JobName=> JobName7 @JobId=> JobId7 @JobStatus=> JobStatus7
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9QJobDetails''' RowIndex: rowNumber Value: $'''Job Name: %JobName7% and Job Id: %JobId7%'''
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9QMainframeStatus''' RowIndex: rowNumber Value: $'''Status: %JobStatus7%'''
+                END
+                IF CurrentRow['udpSync9VFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_UDPSyncJob'
+External.RunFlow FlowId: '77dc3d2e-680c-ef11-9f89-00224829decb' @logFilePath: logFilePath @userPath: userPath @screenshotPath: screenshotPath @SyncJobName: $'''BASNDVR.T.V4.JCLLIB(TCXXXX9V)''' @flowName: $'''UDPSync_9V''' @machineUser: machineUser @udpSyncBatchArgs: udpSyncBatchArgs @environmentName: environmentName @jobCode: $'''9V''' @racfUsername: racfUsername @racfPassword: racfPassword @JobName=> JobName8 @JobId=> JobId8 @JobStatus=> JobStatus8
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9VJobDetails''' RowIndex: rowNumber Value: $'''Job Name: %JobName8% and Job Id: %JobId8%'''
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9VMainframeStatus''' RowIndex: rowNumber Value: $'''Status: %JobStatus8%'''
+                END
+                IF CurrentRow['cicsDateUpdateFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_CICSDateUpdateJob'
+External.RunFlow FlowId: 'de4c9c53-9884-ef11-ac20-6045bdf0fb48' @SUBTRANS: SUBTRANS @UserId: UserId @SystemDate: SystemDate @logFilePath: logFilePath @machineUser: machineUser @screenshotPath: screenshotPath @racfUsername: racfUsername @racfPassword: racfPassword @CICSStatusValue=> CICSStatusValue @CICSStatusComments=> CICSStatusComments
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''CICSStatusComments''' RowIndex: rowNumber Value: CICSStatusComments
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''CICSStatusValue''' RowIndex: rowNumber Value: CICSStatusValue
+                END
+                IF CurrentRow['catalystSmokeFlag'] = $'''Y''' THEN
+                    @@flowname: 'TDM_Catalyst'
+External.RunFlow FlowId: '2aef2997-52e9-4c18-892d-a7706a17e0df' @machineUser: machineUser @logFilePath: logFilePath @userPath: userPath @racfUsername: racfUsername @racfPassword: racfPassword @screenshotPath: screenshotPath @DatabaseName: DatabaseName @ClientName: catalystClientName @trans: catalystTrans @testPlanName: catalystTestPlanName @catalystOutputDetails=> catalystOutputDetails2
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''catalystSmokeStatus''' RowIndex: rowNumber Value: catalystOutputDetails2
+                END
+                File.WriteText File: logFilePath TextToWrite: $'''********************************************************************************
+TDM Flow Execution Completed''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            END
+        END
+        Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+    END
+    Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''D:\\Users\\%machineUser%\\Jenkins_Workspace\\PowerAutomateScripts\\TDM_Flow_Data_Output.xlsx''' Visible: False ReadOnly: False Instance=> tdmFlowData
+    Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: tdmFlowData Name: $'''TDM_DATA'''
+    Excel.WriteToExcel.WriteCell Instance: tdmFlowData Value: tdmExcelData Column: $'''A''' Row: 2
+    Excel.CloseExcel.CloseAndSave Instance: tdmFlowData
+    File.Copy Files: $'''%userPath%\\Jenkins_Workspace\\PowerAutomateScripts\\TDM_Flow_Data_Output.xlsx''' Destination: BuildFolder IfFileExists: File.IfExists.Overwrite CopiedFiles=> CopiedFiles
+    File.WriteText File: $'''%BuildFolder.FullName%\\TDM_E2E_FlowStatus.txt''' TextToWrite: True AppendNewLine: False IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.Unicode
+    EXIT Code: 0
+END
+Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''D:\\Users\\%machineUser%\\Jenkins_Workspace\\PowerAutomateScripts\\TDM_Flow_Data_Output.xlsx''' Visible: False ReadOnly: False Instance=> tdmFlowData
+Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: tdmFlowData Name: $'''TDM_DATA'''
+Excel.WriteToExcel.WriteCell Instance: tdmFlowData Value: tdmExcelData Column: $'''A''' Row: 2
+Excel.CloseExcel.CloseAndSave Instance: tdmFlowData
+File.Copy Files: $'''%userPath%\\Jenkins_Workspace\\PowerAutomateScripts\\TDM_Flow_Data_Output.xlsx''' Destination: BuildFolder IfFileExists: File.IfExists.Overwrite CopiedFiles=> CopiedFiles
+File.WriteText File: $'''%BuildFolder.FullName%\\TDM_E2E_FlowStatus.txt''' TextToWrite: False AppendNewLine: False IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.Unicode

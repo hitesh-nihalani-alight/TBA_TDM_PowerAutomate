@@ -1,0 +1,16 @@
+Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''D:\\Users\\%machineUser%\\Jenkins_Workspace\\PowerAutomateScripts\\New_TDM_Flow_Data.xlsx''' Visible: False ReadOnly: True Instance=> ExcelInstanceReadMS
+Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: ExcelInstanceReadMS Name: $'''Master Sheet'''
+Excel.ReadFromExcel.ReadAllCells Instance: ExcelInstanceReadMS ReadAsText: False FirstLineIsHeader: False RangeValue=> MSExcelDataExtractMgt
+Excel.CloseExcel.Close Instance: ExcelInstanceReadMS
+LOOP FOREACH CurrentRow IN MSExcelDataExtractMgt
+    Variables.IncreaseVariable Value: RowNo IncrementValue: 1
+    IF CurrentRow['Column5'] = $'''RACF ID''' THEN
+        SET RACFID TO CurrentRow['Column6']
+    END
+    IF CurrentRow['Column5'] = $'''RACF Pswd''' THEN
+        SET RACFPWD TO CurrentRow['Column6']
+        File.ConvertFromBase64 Base64Text: RACFPWD File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' IfFileExists: File.IfExists.Overwrite
+        File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> RACFPWD
+        File.Delete Files: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt'''
+    END
+END

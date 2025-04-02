@@ -1,0 +1,533 @@
+BLOCK Beginning_of_TDM_E2E_Flow
+ON BLOCK ERROR
+
+END
+    BLOCK 'Get Excel Parameters'
+ON BLOCK ERROR
+
+END
+        CALL 'Set Excel Global Variable'
+    END
+    SET racfUsername TO $'''@D6276'''
+    SET racfPassword TO $'''TWFyYzIwMjU='''
+    File.ConvertFromBase64 Base64Text: racfPassword File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' IfFileExists: File.IfExists.Overwrite
+    File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> racfOrignalPassword
+    File.Delete Files: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt'''
+    BLOCK 'Close all TDM open application'
+ON BLOCK ERROR
+
+END
+        CALL CloseExistingOpenApplications
+    END
+    BLOCK 'Launch and read Excel'
+ON BLOCK ERROR
+
+END
+        Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''D:\\Users\\%machineUser%\\Jenkins_Workspace\\PowerAutomateScripts\\Input_TDM_Flow_Data.xlsx''' Visible: False ReadOnly: False Instance=> tdmFlowData
+        Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: tdmFlowData Name: $'''TDM_DATA'''
+        Excel.ReadFromExcel.ReadAllCells Instance: tdmFlowData ReadAsText: True FirstLineIsHeader: True RangeValue=> tdmExcelData
+        Excel.CloseExcel.Close Instance: tdmFlowData
+    END
+    BLOCK 'PDM Extract Insertion Flow'
+ON BLOCK ERROR
+
+END
+        File.WriteText File: logFilePath TextToWrite: $'''
+--------------------------------------------------------------------------
+Start of Inserting Extract from extract Manager ''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        SET rowNumber TO 0
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                IF CurrentRow['pdmExtractFlag'] = $'''Y''' THEN
+                    CALL 'Read PDM Extract Insertion Parm'
+                    CALL PDM_Extract_Insertion
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''pdmExtractJobName''' RowIndex: rowNumber Value: JobName_Extract
+                    Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''pdmExtractJobId''' RowIndex: rowNumber Value: JobId_Extract
+                END
+            END
+            Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+        END
+        File.WriteText File: logFilePath TextToWrite: $'''END of Inserting Extract from extract Manager 
+
+--------------------------------------------------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    END
+    BLOCK 'Login Mainframe only'
+ON BLOCK ERROR
+
+END
+        SET RACFLogin TO $'''false'''
+        SET PrimaryMenu TO $'''false'''
+        SET RacfCICSLogin TO $'''false'''
+        CALL Mainframe_Login_Flow
+    END
+    BLOCK 'Check Job Status via Mainframe '
+ON BLOCK ERROR
+
+END
+        IF RACFLogin = $'''true''' THEN
+            File.WriteText File: logFilePath TextToWrite: $'''
+--------------------------------------------------------------------------
+Start of Checking Extract Manager Job Status via Mainframe''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            CALL ISPF_Primary_Menu
+            IF PrimaryMenu = $'''true''' THEN
+                SET rowNumber TO 0
+                LOOP FOREACH CurrentRow IN tdmExcelData
+                    IF CurrentRow['pdmExtractFlag'] = $'''Y''' THEN
+                        SET JobName TO CurrentRow['pdmExtractJobName']
+                        SET JobId TO CurrentRow['pdmExtractJobId']
+                        IF IsNotEmpty(JobId) THEN
+                            CALL Job_Validation
+                            Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''pdmExtractMainframeStatus''' RowIndex: rowNumber Value: JobStatus
+                            IF Contains(ExpectedJobStatus, JobStatus, True) THEN
+                                Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''ExecutionStatus''' RowIndex: rowNumber Value: $'''continue'''
+                            ELSE
+                                Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''ExecutionStatus''' RowIndex: rowNumber Value: $'''stop'''
+                            END
+                            SET JobStatus TO $'''NA'''
+                        END
+                    END
+                    Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+                END
+                File.WriteText File: logFilePath TextToWrite: $'''END of Checking Extract Manager Job Status via Mainframe
+
+-------------------------------------------------------------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            END
+        END
+    END
+    BLOCK 'Add Intn Id in ATE'
+ON BLOCK ERROR
+
+END
+        File.WriteText File: logFilePath TextToWrite: $'''Start of Add Intn Id in ATE flow -------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        SET rowNumber TO 0
+        SET ATELogin TO $'''false'''
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                SET tableName TO $'''PRSN_CHG_CPTR_RNTM'''
+                IF CurrentRow['ExecutionStatus'] = $'''continue''' THEN
+                    IF CurrentRow['InternalIdsInsertionFlag'] = $'''Y''' THEN
+                        IF ATELogin = $'''false''' THEN
+                            System.RunApplication.RunApplication ApplicationPath: $'''WpATEditor.exe''' WorkingDirectory: $'''C:\\Program Files (x86)\\TBA Workbench\\3-Tier Workbench\\presentation\\''' WindowStyle: System.ProcessWindowStyle.Normal ProcessId=> WpATEditorApp
+                            UIAutomation.PopulateTextField.PopulateTextField TextField: appmask['Window \'Login - Advanced Table Editor\'']['Edit \'WindowsForms10.EDIT.app.0.2bf8098_r8_ad1\''] Text: racfUsername Mode: UIAutomation.PopulateTextMode.Replace ClickType: UIAutomation.PopulateMouseClickType.SingleClick
+                            UIAutomation.PopulateTextField.PopulateTextField TextField: appmask['Window \'Login - Advanced Table Editor\'']['Edit \'WindowsForms10.EDIT.app.0.2bf8098_r8_ad1\' 2'] Text: racfOrignalPassword Mode: UIAutomation.PopulateTextMode.Replace ClickType: UIAutomation.PopulateMouseClickType.SingleClick
+                            UIAutomation.PressButton Button: appmask['Window \'Login - Advanced Table Editor\'']['Button \'Logon\'']
+                            SET ATELogin TO $'''true'''
+                            WAIT 10
+                        END
+                        SET personInternalIds TO $'''\'%CurrentRow['personalInternalIds']%'''
+                        SET DatabaseName TO CurrentRow['dataBaseName']
+                        File.WriteText File: logFilePath TextToWrite: $'''Started ---- Insert Personal Ids in PRSN_CHG_CPTR_RNTM table using ATE
+List of Internal Ids to be inserted is: %personInternalIds%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+                        Text.SplitText.SplitWithDelimiter Text: personInternalIds CustomDelimiter: $''',''' IsRegEx: False Result=> personInternalIds
+                        Text.GetSubtext.GetSubtextFromStartTo Text: DatabaseName NumberOfChars: 2 Subtext=> subSystem
+                        SET subSystem TO $'''DB%subSystem%'''
+                        IF (System.IfProcess.ProcessIsRunning ProcessName: $'''WpATEditor''') THEN
+                            CALL Add_Intn_Id_In_ATE
+                            Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''InternalIdsInsertionStatus''' RowIndex: rowNumber Value: InternalIdsInsertionStatus
+                        END
+                    END
+                END
+            END
+            Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+        END
+        File.WriteText File: logFilePath TextToWrite: $'''END of Add Intn Id in ATE flow 
+
+------------------------------------------------------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        IF (System.IfProcess.ProcessIsRunning ProcessName: $'''WpATEditor''') THEN
+            System.TerminateProcess.TerminateProcessById ProcessId: WpATEditorApp
+        END
+    END
+    BLOCK 'update excel after extract submittion'
+ON BLOCK ERROR
+    THROW ERROR
+END
+        CALL 'Update Excel'
+    END
+    BLOCK 'UDP Sync 9@ Job'
+ON BLOCK ERROR
+
+END
+        File.WriteText File: logFilePath TextToWrite: $'''Start of UDP Sync 9@ Job flow for all clients  -------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        SET rowNumber TO 0
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                IF CurrentRow['ExecutionStatus'] = $'''continue''' THEN
+                    IF CurrentRow['udpSync9AtFlag'] = $'''Y''' THEN
+                        CALL 'Read PDM Extract Insertion Parm'
+                        SET UDPSyncJobInputName TO $'''BASNDVR.T.V4.JCLLIB(TCXXXX9@)'''
+                        CALL UDPSyncJob
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9AtJobName''' RowIndex: rowNumber Value: UDPJobName
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9AtJobId''' RowIndex: rowNumber Value: UDPJobId
+                    END
+                END
+            END
+            Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+        END
+        File.WriteText File: logFilePath TextToWrite: $'''END of UDP Sync 9@ Job flow for all clients  
+
+--------------------------------------------------------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    END
+    BLOCK '9AT Check Job Status via Mainframe '
+ON BLOCK ERROR
+
+END
+        File.WriteText File: logFilePath TextToWrite: $'''Checking of 9AT Job Status via Mainframe''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        IF PrimaryMenu = $'''true''' THEN
+            File.WriteText File: logFilePath TextToWrite: $'''Start of checking of Mainframe UDP Sync 9@ Job Status flow for all clients  ---------->>>''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            SET rowNumber TO 0
+            LOOP FOREACH CurrentRow IN tdmExcelData
+                IF CurrentRow['udpSync9AtFlag'] = $'''Y''' THEN
+                    SET JobName TO CurrentRow['udpSync9AtJobName']
+                    SET JobId TO CurrentRow['udpSync9AtJobId']
+                    IF IsNotEmpty(JobId) THEN
+                        CALL Job_Validation
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9AtMainframeStatus''' RowIndex: rowNumber Value: JobStatus
+                        SET JobStatus TO $'''NA'''
+                    END
+                END
+                Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+            END
+            File.WriteText File: logFilePath TextToWrite: $'''END of checking of Mainframe UDP Sync 9@ Job Status flow for all clients  
+
+-----------------------------------------------------------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        END
+    END
+    BLOCK 'UDP Sync 9V Job'
+ON BLOCK ERROR
+
+END
+        SET rowNumber TO 0
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                IF CurrentRow['ExecutionStatus'] = $'''continue''' THEN
+                    IF CurrentRow['udpSync9VFlag'] = $'''Y''' THEN
+                        CALL 'Read PDM Extract Insertion Parm'
+                        SET UDPJobName TO $'''empty'''
+                        SET UDPJobId TO $'''empty'''
+                        SET UDPSyncJobInputName TO $'''BASNDVR.T.V4.JCLLIB(TCXXXX9V)'''
+                        CALL UDPSyncJob
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9VJobName''' RowIndex: rowNumber Value: UDPJobName
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9VJobId''' RowIndex: rowNumber Value: UDPJobId
+                    END
+                END
+            END
+            Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+        END
+    END
+    BLOCK '9V Check Job Status via Mainframe '
+ON BLOCK ERROR
+
+END
+        File.WriteText File: logFilePath TextToWrite: $'''Checking of 9V Job Status via Mainframe''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        IF PrimaryMenu = $'''true''' THEN
+            File.WriteText File: logFilePath TextToWrite: $'''-----------------------------------------------------------------------------------
+
+Start of checking of Mainframe UDP Sync 9V Job Status flow for all clients  
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            SET rowNumber TO 0
+            LOOP FOREACH CurrentRow IN tdmExcelData
+                IF CurrentRow['udpSync9VFlag'] = $'''Y''' THEN
+                    SET JobName TO CurrentRow['udpSync9VJobName']
+                    SET JobId TO CurrentRow['udpSync9VJobId']
+                    IF IsNotEmpty(JobId) THEN
+                        CALL Job_Validation
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9VMainframeStatus''' RowIndex: rowNumber Value: JobStatus
+                        SET JobStatus TO $'''NA'''
+                    END
+                END
+                Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+            END
+            File.WriteText File: logFilePath TextToWrite: $'''END of checking of Mainframe UDP Sync 9V Job Status flow for all clients  
+
+-----------------------------------------------------------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        END
+    END
+    BLOCK 'UDP Sync 9P Job'
+ON BLOCK ERROR
+
+END
+        SET rowNumber TO 0
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                IF CurrentRow['ExecutionStatus'] = $'''continue''' THEN
+                    IF CurrentRow['udpSync9PFlag'] = $'''Y''' THEN
+                        CALL 'Read PDM Extract Insertion Parm'
+                        SET UDPJobName TO $'''empty'''
+                        SET UDPJobId TO $'''empty'''
+                        SET UDPSyncJobInputName TO $'''BASNDVR.T.V4.JCLLIB(TCXXXX9P)'''
+                        CALL UDPSyncJob
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9PJobName''' RowIndex: rowNumber Value: UDPJobName
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9PJobId''' RowIndex: rowNumber Value: UDPJobId
+                    END
+                END
+            END
+            Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+        END
+    END
+    BLOCK '9P Check Job Status via Mainframe '
+ON BLOCK ERROR
+
+END
+        File.WriteText File: logFilePath TextToWrite: $'''Checking of 9P Job Status via Mainframe''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        IF PrimaryMenu = $'''true''' THEN
+            File.WriteText File: logFilePath TextToWrite: $'''-----------------------------------------------------------------------------------
+
+Start of checking of Mainframe UDP Sync 9P Job Status flow for all clients  
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            SET rowNumber TO 0
+            LOOP FOREACH CurrentRow IN tdmExcelData
+                IF CurrentRow['udpSync9PFlag'] = $'''Y''' THEN
+                    SET JobName TO CurrentRow['udpSync9PJobName']
+                    SET JobId TO CurrentRow['udpSync9PJobId']
+                    IF IsNotEmpty(JobId) THEN
+                        CALL Job_Validation
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9PMainframeStatus''' RowIndex: rowNumber Value: JobStatus
+                        SET JobStatus TO $'''NA'''
+                    END
+                END
+                Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+            END
+            File.WriteText File: logFilePath TextToWrite: $'''END of checking of Mainframe UDP Sync 9P Job Status flow for all clients  
+
+-----------------------------------------------------------------------------------
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        END
+    END
+    BLOCK 'UDP Sync 9Q Job'
+ON BLOCK ERROR
+
+END
+        SET rowNumber TO 0
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                IF CurrentRow['ExecutionStatus'] = $'''continue''' THEN
+                    IF CurrentRow['udpSync9QFlag'] = $'''Y''' THEN
+                        CALL 'Read PDM Extract Insertion Parm'
+                        SET UDPJobName TO $'''empty'''
+                        SET UDPJobId TO $'''empty'''
+                        SET UDPSyncJobInputName TO $'''BASNDVR.T.V4.JCLLIB(TCXXXX9Q)'''
+                        CALL UDPSyncJob
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9QJobName''' RowIndex: rowNumber Value: UDPJobName
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9QJobId''' RowIndex: rowNumber Value: UDPJobId
+                    END
+                END
+            END
+            Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+        END
+    END
+    BLOCK '9Q Check Job Status via Mainframe '
+ON BLOCK ERROR
+
+END
+        IF PrimaryMenu = $'''true''' THEN
+            File.WriteText File: logFilePath TextToWrite: $'''
+-----------------------------------------------------------------------------------
+Start of checking of Mainframe UDP Sync 9Q Job Status flow for all clients  
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            SET rowNumber TO 0
+            LOOP FOREACH CurrentRow IN tdmExcelData
+                IF CurrentRow['udpSync9QFlag'] = $'''Y''' THEN
+                    SET JobName TO CurrentRow['udpSync9QJobName']
+                    SET JobId TO CurrentRow['udpSync9QJobId']
+                    IF IsNotEmpty(JobId) THEN
+                        CALL Job_Validation
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''udpSync9QMainframeStatus''' RowIndex: rowNumber Value: JobStatus
+                        SET JobStatus TO $'''NA'''
+                    END
+                END
+                Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+            END
+            File.WriteText File: logFilePath TextToWrite: $'''END of checking of Mainframe UDP Sync 9Q Job Status flow for all clients  
+
+-----------------------------------------------------------------------------------
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        END
+    END
+    BLOCK 'Open CICS Window'
+ON BLOCK ERROR
+
+END
+        IF PrimaryMenu = $'''true''' THEN
+            File.WriteText File: logFilePath TextToWrite: $'''-----------------------------------------------------------------------------------
+Exit from ISPF Primary Menu in Mainframe
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            CALL Exit_From_ISPF_Primary_Menu
+            File.WriteText File: logFilePath TextToWrite: $'''-----------------------------------------------------------------------------------
+Open Mainframe Window for CICS execution
+-----------------------------------------------------------------------------------
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            CALL Open_Mainframe_CICS_Window
+        END
+    END
+    BLOCK 'CICS Date Update Flow'
+ON BLOCK ERROR
+
+END
+        IF RacfCICSLogin = $'''true''' THEN
+            SET rowNumber TO 0
+            File.WriteText File: logFilePath TextToWrite: $'''Start of Mainframe CICS date update flow
+-----------------------------------------------------------------------------------
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            LOOP FOREACH CurrentRow IN tdmExcelData
+                IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                    IF CurrentRow['ExecutionStatus'] = $'''continue''' THEN
+                        IF CurrentRow['cicsDateUpdateFlag'] = $'''Y''' THEN
+                            CALL 'Read Excel CICS Date Param'
+                            CALL CICS_Date_Update
+                            Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''CICSStatusComments''' RowIndex: rowNumber Value: CICSStatusComments
+                            Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''CICSStatusValue''' RowIndex: rowNumber Value: CICSStatusValue
+                        END
+                        IF CurrentRow['ZapFlag'] = $'''Y''' THEN
+                            CALL CICS_Zap
+                            Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''ZapStatusComments''' RowIndex: rowNumber Value: ZapStatusComments
+                            Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''ZapStatusValue''' RowIndex: rowNumber Value: ZapStatusValue
+                        END
+                    END
+                END
+                Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+            END
+            File.WriteText File: logFilePath TextToWrite: $'''END of Mainframe CICS date update flow
+-----------------------------------------------------------------------------------
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        END
+    END
+    BLOCK 'Catalyst GUI Flow'
+ON BLOCK ERROR
+
+END
+        File.WriteText File: logFilePath TextToWrite: $'''-----------------------------------------------------------------------------------
+
+Start of Catalyst GUI flow
+
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        SET rowNumber TO 0
+        SET ATELogin TO $'''false'''
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            IF CurrentRow['TCFlag'] = $'''Y''' THEN
+                IF CurrentRow['ExecutionStatus'] = $'''continue''' THEN
+                    IF CurrentRow['catalystSmokeFlag'] = $'''Y''' THEN
+                        IF ATELogin = $'''false''' THEN
+                            File.WriteText File: logFilePath TextToWrite: $'''Started - Catalyst Smoke Process for Client %catalystClientName%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+                            System.RunApplication.RunApplicationAndWaitToLoad ApplicationPath: $'''Catalyst.Shell.exe''' WorkingDirectory: $'''C:\\Program Files\\Alight\\Catalyst''' WindowStyle: System.ProcessWindowStyle.Maximized Timeout: 30 ProcessId=> catalystApp WindowHandle=> WindowHandle
+                            UIAutomation.Click.Click Element: appmask['Window \'catalysT - Login\'']['Text \'@XXXXX\''] ClickType: UIAutomation.ClickType.LeftClick OffsetX: -8 OffsetY: 0 MousePositionRelativeToElement: UIAutomation.RectangleEdgePoint.MiddleCenter
+                            UIAutomation.PopulateTextField.PopulateTextField TextField: appmask['Window \'catalysT - Login\'']['Edit \'TextBox\''] Text: racfUsername Mode: UIAutomation.PopulateTextMode.Replace ClickType: UIAutomation.PopulateMouseClickType.SingleClick
+                            UIAutomation.Click.Click Element: appmask['Window \'catalysT - Login\'']['Text \'RACF Password\''] ClickType: UIAutomation.ClickType.LeftClick OffsetX: -9 OffsetY: -3 MousePositionRelativeToElement: UIAutomation.RectangleEdgePoint.MiddleCenter
+                            UIAutomation.PopulateTextField.PopulateTextField TextField: appmask['Window \'catalysT - Login\'']['Edit \'PasswordBox\''] Text: racfOrignalPassword Mode: UIAutomation.PopulateTextMode.Replace ClickType: UIAutomation.PopulateMouseClickType.SingleClick
+                            UIAutomation.PressButton Button: appmask['Window \'catalysT - Login\'']['Button \'Login\'']
+                            WAIT 15
+                            IF (UIAutomation.IfWindowContains.WindowContainsElement Element: appmask['Window \'catalysT - Home\'']['UI Custom \'CatalystFormWrapper\'']) THEN
+                                UIAutomation.PressButton Button: appmask['Window \'catalysT - Home\'']['Button \'Renew\''] Simulate: False
+                            END
+                            IF (UIAutomation.IfWindowContains.WindowContainsElement Element: appmask['Window \'catalysT - Home\'']['Window \'Window\'']) THEN
+                                UIAutomation.PressButton Button: appmask['Window \'catalysT - Home\'']['Button \'OK\'']
+                            END
+                            UIAutomation.ResizeWindow.Resize Window: appmask['Window \'catalysT - Home\''] Width: 1920 Height: 1080
+                        END
+                        SET catalystDatabaseName TO CurrentRow['dataBaseName']
+                        SET catalystClientName TO CurrentRow['catalystClientName']
+                        SET catalystTrans TO CurrentRow['catalystTrans']
+                        SET catalystTestPlanName TO CurrentRow['catalystTestPlanName']
+                        CALL Catalyst_GUI_Flow
+                        Variables.ModifyDataTableItem DataTable: tdmExcelData ColumnNameOrIndex: $'''catalystSmokeStatus''' RowIndex: rowNumber Value: catalystOutputDetails
+                    END
+                END
+            END
+            Variables.IncreaseVariable Value: rowNumber IncrementValue: 1
+            File.WriteText File: logFilePath TextToWrite: $'''END of Catalyst GUI flow
+-----------------------------------------------------------------------------------
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        END
+        IF (System.IfProcess.ProcessIsRunning ProcessName: $'''Catalyst.Shell''') THEN
+            System.TerminateProcess.TerminateProcessByName ProcessName: $'''Catalyst.Shell'''
+        END
+    END
+    BLOCK 'Launch and update Excel'
+ON BLOCK ERROR
+
+END
+        File.WriteText File: logFilePath TextToWrite: $'''
+-----------------------------------------------------------------------------------Start writing the date to Output Excel File
+
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''D:\\Users\\%machineUser%\\Jenkins_Workspace\\PowerAutomateScripts\\Output_TDM_Flow_Data.xlsx''' Visible: False ReadOnly: False Instance=> tdmFlowData
+        Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: tdmFlowData Name: $'''TDM_DATA'''
+        Excel.WriteToExcel.WriteCell Instance: tdmFlowData Value: tdmExcelData Column: $'''A''' Row: 2
+        Excel.CloseExcel.CloseAndSave Instance: tdmFlowData
+        File.Copy Files: $'''%userPath%\\Jenkins_Workspace\\PowerAutomateScripts\\New_TDM_Flow_Data_Output.xlsx''' Destination: BuildFolder IfFileExists: File.IfExists.Overwrite CopiedFiles=> CopiedFiles
+        File.WriteText File: logFilePath TextToWrite: $'''
+End of writing the date to Output Excel File
+
+-----------------------------------------------------------------------------------
+
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    END
+    BLOCK 'Close Mainframe CICS only'
+ON BLOCK ERROR
+
+END
+        IF (System.IfProcess.ProcessIsRunning ProcessName: $'''bzmd''') THEN
+            CALL Close_Mainframe_CICS_Window
+            CALL Mainframe_Logout_Flow
+        END
+    END
+    File.WriteText File: TDMFlowStatus TextToWrite: True AppendNewLine: False IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.Unicode
+    File.WriteText File: logFilePath TextToWrite: $'''----------------------------------------------------------------
+Start To End Flow completed without any Issue
+-------------------------------------------------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    EXIT Code: 0
+END
+ERROR => LastError_End
+File.WriteText File: logFilePath TextToWrite: $'''----------------------------------------------------------------
+Start To End Flow completed
+
+Error: %LastError_End%
+-------------------------------------------------------------------------''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+File.WriteText File: TDMFlowStatus TextToWrite: False AppendNewLine: False IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.Unicode
+
+# [ControlRepository][PowerAutomateDesktop]
+
+{
+  "ControlRepositorySymbols": [
+    {
+      "IgnoreImagesOnSerialization": false,
+      "Repository": "{\r\n  \"Screens\": [\r\n    {\r\n      \"Controls\": [\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Edit\",\r\n          \"InstanceId\": \"3c94ba4b-d045-4af0-b89e-87b84faf4ae6\",\r\n          \"Name\": \"Edit 'WindowsForms10.EDIT.app.0.2bf8098_r8_ad1'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"WindowsForms10.EDIT.app.0.2bf8098_r8_ad1\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"m_ctrlUserId\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Edit 'WindowsForms10.EDIT.app.0.2bf8098_r8_ad1'\",\r\n                  \"Tag\": \"edit\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"edit\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\bf50647a-4974-44b2-8aa4-1477de00459d.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Edit\",\r\n          \"InstanceId\": \"6a7c7ca6-a03b-4b8e-bf8f-08503f759dc1\",\r\n          \"Name\": \"Edit 'WindowsForms10.EDIT.app.0.2bf8098_r8_ad1' 2\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"WindowsForms10.EDIT.app.0.2bf8098_r8_ad1\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"m_ctrlPassword\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Edit 'WindowsForms10.EDIT.app.0.2bf8098_r8_ad1'\",\r\n                  \"Tag\": \"edit\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"edit\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\982bd070-1b67-49a1-8a55-88bf743be3d4.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Button\",\r\n          \"InstanceId\": \"3cce6cb3-04b1-4cc2-b9bf-3af88fe4630f\",\r\n          \"Name\": \"Button 'Logon'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"WindowsForms10.BUTTON.app.0.2bf8098_r8_ad1\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"m_btnLogon\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"IsDefault\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": false\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Logon\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Button 'Logon'\",\r\n                  \"Tag\": \"button\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"button\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\9aa390b9-cd64-4fb5-8188-e44b18f66d57.png\"\r\n        }\r\n      ],\r\n      \"Handle\": {\r\n        \"value\": 0\r\n      },\r\n      \"ProcessName\": null,\r\n      \"ScreenShot\": null,\r\n      \"ElementTypeName\": \"Window\",\r\n      \"InstanceId\": \"26dd872d-3320-492e-b749-b005ab0f9d33\",\r\n      \"Name\": \"Window 'Login - Advanced Table Editor'\",\r\n      \"SelectorCount\": 1,\r\n      \"Selectors\": [\r\n        {\r\n          \"CustomSelector\": null,\r\n          \"Elements\": [\r\n            {\r\n              \"Attributes\": [\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Class\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"WindowsForms10.Window.8.app.0.2bf8098_r8_ad1\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Enabled\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Id\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"CWpATELogOn\"\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Name\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"Login - Advanced Table Editor\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": true,\r\n                  \"Name\": \"Ordinal\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": 0\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Process\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"WpATEditor\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Visible\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                }\r\n              ],\r\n              \"CustomValue\": null,\r\n              \"Ignore\": false,\r\n              \"Name\": \"Window 'Login - Advanced Table Editor'\",\r\n              \"Tag\": \"window\"\r\n            }\r\n          ],\r\n          \"Ignore\": false,\r\n          \"ImageSelector\": null,\r\n          \"IsCustom\": false,\r\n          \"IsImageBased\": false,\r\n          \"IsWindowsInstance\": false,\r\n          \"Name\": \"Default Selector\",\r\n          \"Properties\": []\r\n        }\r\n      ],\r\n      \"Tag\": \"window\",\r\n      \"ScreenshotPath\": \"controlRepo-screenshots\\\\3c48612f-cb2b-4aac-831d-97560171e99a.png\"\r\n    },\r\n    {\r\n      \"Controls\": [\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Text\",\r\n          \"InstanceId\": \"4ea62178-e803-4df3-a6af-71822d14d468\",\r\n          \"Name\": \"Text '@XXXXX'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"TextBox\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"txtRacfId\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Edit 'TextBox'\",\r\n                  \"Tag\": \"edit\"\r\n                },\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"TextBlock\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"@XXXXX\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Text '@XXXXX'\",\r\n                  \"Tag\": \"text\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"text\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\9dac5375-2a79-4051-a208-1552d90e6803.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Edit\",\r\n          \"InstanceId\": \"0f2f5029-bc62-4118-bd6a-2af6e0e15b81\",\r\n          \"Name\": \"Edit 'TextBox'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"TextBox\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"txtRacfId\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Edit 'TextBox'\",\r\n                  \"Tag\": \"edit\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"edit\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\c6e32a23-95d4-4102-83f9-5b4aca56183a.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Text\",\r\n          \"InstanceId\": \"e71bffff-1f2b-4552-b760-1a300f2f5365\",\r\n          \"Name\": \"Text 'RACF Password'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"PasswordBox\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"passwordBox\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Edit 'PasswordBox'\",\r\n                  \"Tag\": \"edit\"\r\n                },\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"TextBlock\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"RACF Password\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Text 'RACF Password'\",\r\n                  \"Tag\": \"text\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"text\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\5b04cdb2-3b19-4ba8-a512-881a8759eedd.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Edit\",\r\n          \"InstanceId\": \"1363ac64-4cfb-46e8-aa74-9922c889b57e\",\r\n          \"Name\": \"Edit 'PasswordBox'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"PasswordBox\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"passwordBox\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Edit 'PasswordBox'\",\r\n                  \"Tag\": \"edit\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"edit\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\af61810a-f062-48cd-b993-fa7112bc734a.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Text\",\r\n          \"InstanceId\": \"ee499605-eeb1-4caf-bdd4-2368c75cf08a\",\r\n          \"Name\": \"Button 'Login'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Button\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"IsDefault\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": false\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Login\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Button 'Login'\",\r\n                  \"Tag\": \"button\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"text\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\4430893c-1277-4c00-8e39-6872ced5435c.png\"\r\n        }\r\n      ],\r\n      \"Handle\": {\r\n        \"value\": 0\r\n      },\r\n      \"ProcessName\": null,\r\n      \"ScreenShot\": null,\r\n      \"ElementTypeName\": \"Window\",\r\n      \"InstanceId\": \"72c20b3f-0b76-4d63-aec8-cdf341851f06\",\r\n      \"Name\": \"Window 'catalysT - Login'\",\r\n      \"SelectorCount\": 1,\r\n      \"Selectors\": [\r\n        {\r\n          \"CustomSelector\": null,\r\n          \"Elements\": [\r\n            {\r\n              \"Attributes\": [\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Class\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"HwndWrapper[Catalyst.Shell.exe;;e314b895-6bcb-4370-8ccd-f7ab32f760cb]\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Enabled\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Id\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"\"\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Name\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"catalysT - Login\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": true,\r\n                  \"Name\": \"Ordinal\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": 0\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Process\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"Catalyst.Shell\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Visible\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                }\r\n              ],\r\n              \"CustomValue\": null,\r\n              \"Ignore\": false,\r\n              \"Name\": \"Window 'catalysT - Login'\",\r\n              \"Tag\": \"window\"\r\n            }\r\n          ],\r\n          \"Ignore\": false,\r\n          \"ImageSelector\": null,\r\n          \"IsCustom\": false,\r\n          \"IsImageBased\": false,\r\n          \"IsWindowsInstance\": false,\r\n          \"Name\": \"Default Selector\",\r\n          \"Properties\": []\r\n        }\r\n      ],\r\n      \"Tag\": \"window\",\r\n      \"ScreenshotPath\": \"controlRepo-screenshots\\\\8c186152-fc39-4280-bc6d-94fc4ca4a745.png\"\r\n    },\r\n    {\r\n      \"Controls\": [\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"UI Custom\",\r\n          \"InstanceId\": \"ccd6f963-1101-441a-bd1b-3d60d51d3830\",\r\n          \"Name\": \"UI Custom 'CatalystFormWrapper'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Window\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Renew Extract\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Process\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Catalyst.Shell\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Window 'Renew Extract'\",\r\n                  \"Tag\": \"window\"\r\n                },\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"RenewExtractView\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"UI Custom 'RenewExtractView'\",\r\n                  \"Tag\": \"custom\"\r\n                },\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"CatalystFormWrapper\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"CatalystFormWrapperView\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"UI Custom 'CatalystFormWrapper'\",\r\n                  \"Tag\": \"custom\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"custom\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\4796e89e-35ca-4224-941b-dc5e677ff1ac.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Button\",\r\n          \"InstanceId\": \"c5d23389-abc7-4902-b40b-3aba9a04e563\",\r\n          \"Name\": \"Button 'Renew'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Window\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Renew Extract\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Process\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Catalyst.Shell\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Window 'Renew Extract'\",\r\n                  \"Tag\": \"window\"\r\n                },\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"RenewExtractView\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"UI Custom 'RenewExtractView'\",\r\n                  \"Tag\": \"custom\"\r\n                },\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"CatalystFormWrapper\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"CatalystFormWrapperView\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"UI Custom 'CatalystFormWrapper'\",\r\n                  \"Tag\": \"custom\"\r\n                },\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Button\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"IsDefault\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": false\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Renew\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Button 'Renew'\",\r\n                  \"Tag\": \"button\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"button\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\eae47d79-d1bc-45b8-a6bc-2907dcfe1594.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Window\",\r\n          \"InstanceId\": \"e303df56-931d-4176-aa99-284bcccd3c32\",\r\n          \"Name\": \"Window 'Window'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Window\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Process\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Catalyst.Shell\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Window 'Window'\",\r\n                  \"Tag\": \"window\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"window\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\486fbdd7-4c08-48fb-bdac-3a48c78b9af1.png\"\r\n        },\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Button\",\r\n          \"InstanceId\": \"18a13206-8c8f-4428-b3b0-0cb3fe32ca45\",\r\n          \"Name\": \"Button 'OK'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Window\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Process\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Catalyst.Shell\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Window 'Window'\",\r\n                  \"Tag\": \"window\"\r\n                },\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Button\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"btnOk\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"IsDefault\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": false\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"OK\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Button 'OK'\",\r\n                  \"Tag\": \"button\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"button\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\8eace212-172a-4ae4-9da0-7861756d2547.png\"\r\n        }\r\n      ],\r\n      \"Handle\": {\r\n        \"value\": 0\r\n      },\r\n      \"ProcessName\": null,\r\n      \"ScreenShot\": null,\r\n      \"ElementTypeName\": \"Window\",\r\n      \"InstanceId\": \"08152f0b-4ecf-4346-bd7b-cb420cf5c1ce\",\r\n      \"Name\": \"Window 'catalysT - Home'\",\r\n      \"SelectorCount\": 1,\r\n      \"Selectors\": [\r\n        {\r\n          \"CustomSelector\": null,\r\n          \"Elements\": [\r\n            {\r\n              \"Attributes\": [\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Class\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"HwndWrapper[Catalyst.Shell.exe;;6ae67e80-3a70-4671-b01d-8794f9acb4ac]\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Enabled\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Id\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"\"\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Name\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"catalysT - Home\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": true,\r\n                  \"Name\": \"Ordinal\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": 0\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Process\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"Catalyst.Shell\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Visible\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                }\r\n              ],\r\n              \"CustomValue\": null,\r\n              \"Ignore\": false,\r\n              \"Name\": \"Window 'catalysT - Home'\",\r\n              \"Tag\": \"window\"\r\n            }\r\n          ],\r\n          \"Ignore\": false,\r\n          \"ImageSelector\": null,\r\n          \"IsCustom\": false,\r\n          \"IsImageBased\": false,\r\n          \"IsWindowsInstance\": false,\r\n          \"Name\": \"Default Selector\",\r\n          \"Properties\": []\r\n        }\r\n      ],\r\n      \"Tag\": \"window\",\r\n      \"ScreenshotPath\": \"controlRepo-screenshots\\\\80cded52-a89c-4eed-b795-ef12353bd5e7.png\"\r\n    }\r\n  ],\r\n  \"Version\": 1\r\n}",
+      "ImportMetadata": {
+        "DisplayName": "Local computer",
+        "ConnectionString": "",
+        "Type": "Local",
+        "DesktopType": "local"
+      },
+      "Name": "appmask"
+    }
+  ],
+  "ImageRepositorySymbol": {
+    "Repository": "{\r\n  \"Folders\": [],\r\n  \"Images\": [],\r\n  \"Version\": 1\r\n}",
+    "ImportMetadata": {},
+    "Name": "imgrepo"
+  },
+  "ConnectionReferences": []
+}

@@ -1,0 +1,17 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+    THROW ERROR
+END
+    SET ZapStatusComments TO $'''Not Executed'''
+    SET ZapStatusValue TO $'''Not Executed'''
+    File.WriteText File: logFilePath TextToWrite: $'''Started - CICS Zap Provision Process ''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 45 TreatAtCharacterAsLiteral: False
+    Text.GetSubtext.GetSubtextFromStartTo Text: SUBTRANS NumberOfChars: 3 Subtext=> ZapTrans
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: ZapTrans TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 21 TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 5
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+END
