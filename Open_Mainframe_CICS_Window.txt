@@ -1,0 +1,31 @@
+BLOCK 'Mainframe Login Flow Start'
+ON BLOCK ERROR
+
+END
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Session Selection''' IsRegEx: False Timeout: 2
+        ON ERROR
+
+        END
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnFieldWithLabel Session: TerminalSession Text: $'''c''' FieldLabel: $'''CICS - STE''' TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnFieldWithLabel Session: TerminalSession Text: $'''s''' FieldLabel: $'''CICS - STE''' TreatAtCharacterAsLiteral: False
+    DISABLE TerminalEmulation.SetTextOnTerminalSession.SetTextOnFieldWithLabel Session: TerminalSession Text: $'''s''' FieldLabel: $'''CICS - TEST MENU''' TreatAtCharacterAsLiteral: False
+    File.WriteText File: logFilePath TextToWrite: $'''CICS TEST Menu Session Opened''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\CICS_TEST_MENU.jpg''' ImageFormat: System.ImageFormat.Jpg
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TEST - C I C S - System Menu''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 4 TreatAtCharacterAsLiteral: True
+    File.WriteText File: logFilePath TextToWrite: $'''System Menu Option Selected as - 4''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\SystemMenu.jpg''' ImageFormat: System.ImageFormat.Jpg
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TBA UTILITY MENU''' IsRegEx: False Timeout: 0
+    SET RacfCicsLogin TO $'''true'''
+    GOTO 'RACF CICS Login Successful'
+    LABEL 'RACF CICS Login Failed'
+    File.WriteText File: logFilePath TextToWrite: $'''RACF CICS Mainframe Login Failed''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\RacfCICSLoginFailed.jpg''' ImageFormat: System.ImageFormat.Jpg
+    LABEL 'RACF CICS Login Successful'
+    File.WriteText File: logFilePath TextToWrite: $'''RACF CICS Mainframe Login was successful''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+END

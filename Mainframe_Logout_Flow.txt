@@ -1,0 +1,9 @@
+IF (System.IfProcess.ProcessIsRunning ProcessName: $'''bzmd''') THEN
+    BLOCK 'Mainframe Logout Flow Start'
+ON BLOCK ERROR
+
+END
+        TerminalEmulation.CloseSession Session: TerminalSession
+        System.TerminateProcess.TerminateProcessByName ProcessName: $'''bzmd'''
+    END
+END

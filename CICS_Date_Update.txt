@@ -1,0 +1,91 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+    THROW ERROR
+END
+    SET CICSStatusComments TO $'''Not Executed'''
+    SET CICSStatusValue TO $'''Not Executed'''
+    File.WriteText File: logFilePath TextToWrite: $'''Started - CICS Date Update Process ''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    File.WriteText File: logFilePath TextToWrite: $'''Login Successful''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Variables.CreateNewDatatable InputTable: { } DataTable=> readRecordCheck
+    Variables.CreateNewDatatable InputTable: { } DataTable=> readFailedCheck
+    Variables.CreateNewDatatable InputTable: { } DataTable=> dateUpdatedCheck
+    Variables.CreateNewDatatable InputTable: { } DataTable=> FindUpdatedSystemDate
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TBA UTILITY MENU''' IsRegEx: False Timeout: 3
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 14 TreatAtCharacterAsLiteral: False
+    DISABLE TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: SUBTRANS TreatAtCharacterAsLiteral: False
+    File.WriteText File: logFilePath TextToWrite: $'''TBA Utility Menu - Trans Entered as %SUBTRANS%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%ClientScreenshotPath%\\TBAUtilityMenu.jpg''' ImageFormat: System.ImageFormat.Jpg
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''GLOBAL VARIABLES (BASF902O) ENTRY AND UPDATE''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: SUBTRANS TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: UserId TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F1
+    WAIT 5
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''RECORD READ''' IsRegEx: False ColumnSize: 80 Results=> readRecordCheck
+        ON ERROR
+
+        END
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''902O READ FAILED CICS-RESP = NOTFOUND''' IsRegEx: False ColumnSize: 80 Results=> readFailedCheck
+        ON ERROR
+
+        END
+    IF readRecordCheck.RowsCount <> 0 THEN
+        TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''C''' TreatAtCharacterAsLiteral: False
+    END
+    IF readFailedCheck.RowsCount <> 0 THEN
+        TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''A''' TreatAtCharacterAsLiteral: False
+    END
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: SUBTRANS TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: UserId TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: SystemDate TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''******''' TreatAtCharacterAsLiteral: True
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%ClientScreenshotPath%\\CICSDate_Entered.jpg''' ImageFormat: System.ImageFormat.Jpg
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F5
+    WAIT 2
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''GVAR RECORD''' IsRegEx: False ColumnSize: 80 Results=> dateUpdatedCheck
+        ON ERROR
+
+        END
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%ClientScreenshotPath%\\Message_CICSDate.jpg''' ImageFormat: System.ImageFormat.Jpg
+    IF dateUpdatedCheck.RowsCount <> 0 THEN
+        File.WriteText File: logFilePath TextToWrite: $'''CICS Date Added/Updated''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    ELSE
+        File.WriteText File: logFilePath TextToWrite: $'''CICS Date not Added/Updated''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    END
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F1
+    WAIT 2
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: SystemDate IsRegEx: False ColumnSize: 80 Results=> FindUpdatedSystemDate
+        ON ERROR
+
+        END
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%ClientScreenshotPath%\\CICSDate_Update_Validation.jpg''' ImageFormat: System.ImageFormat.Jpg
+    WAIT 2
+    IF IsNotEmpty(FindUpdatedSystemDate) THEN
+        SET CICSStatusComments TO $'''CICS System Date Updated'''
+        SET CICSStatusValue TO $'''Pass'''
+    ELSE
+        SET CICSStatusComments TO $'''Failed to add/update CICS Date'''
+        SET CICSStatusValue TO $'''Fail'''
+    END
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TBA UTILITY MENU''' IsRegEx: False Timeout: 0
+    WAIT 2
+    File.WriteText File: logFilePath TextToWrite: $'''Completed ---- CICS Date Update Process ''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    GOTO End_of_Flow
+END
+ERROR => LastError Reset: True
+SET CICSStatusValue TO $'''Error'''
+SET CICSStatusComments TO $'''Error while add/update CICS Date'''
+File.WriteText File: logFilePath TextToWrite: $'''Error in CICS Date Update Flow.
+Error: %LastError%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+LABEL End_of_Flow

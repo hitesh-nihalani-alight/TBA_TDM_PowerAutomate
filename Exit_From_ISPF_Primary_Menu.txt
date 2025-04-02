@@ -1,0 +1,18 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+
+END
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''ISPF Primary Option Menu''' IsRegEx: False Timeout: 3
+        ON ERROR REPEAT 2 TIMES WAIT 2
+        ON ERROR
+
+        END
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''X''' TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    DISABLE TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+    WAIT 2
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''logoff''' TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+END

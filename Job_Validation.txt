@@ -1,0 +1,104 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+
+END
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''ISPF Primary Option Menu''' IsRegEx: False Timeout: 3
+        ON ERROR REPEAT 25 TIMES WAIT 2
+        ON ERROR
+            CALL SendTransmitKey
+            THROW ERROR
+        END
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''ej st %JobName%''' TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    SET searchCount TO 1
+    SET pageCount TO 1
+    LABEL SearchJobId
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Row''' IsRegEx: False Timeout: 2
+        ON ERROR
+            CALL SendTransmitKey
+        END
+    IF pageCount = 1 THEN
+        TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''sort JobID d''' TreatAtCharacterAsLiteral: False
+        TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+        WAIT 2
+        Variables.IncreaseVariable Value: pageCount IncrementValue: 1
+    END
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: JobId IsRegEx: False ColumnSize: 80 Results=> FindResults
+        ON ERROR
+            GOTO SearchJobId
+        END
+    Variables.RetrieveDataTableColumnIntoList DataTable: FindResults ColumnNameOrIndex: $'''Row''' ColumnAsList=> Rows
+    Variables.RetrieveDataTableColumnIntoList DataTable: FindResults ColumnNameOrIndex: $'''Column''' ColumnAsList=> Columns
+    Text.ToNumber Text: Rows Number=> Rows
+        ON ERROR
+            CALL SendTransmitKey
+            GOTO SearchJobId
+        END
+    Text.ToNumber Text: Columns Number=> Columns
+    SET Columns TO Columns + 46
+    TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobStatus
+        ON ERROR FieldLabelNotFoundError
+            CALL SendTransmitKey
+            THROW ERROR
+        END
+    Text.Trim Text: JobStatus TrimOption: Text.TrimOption.Both TrimmedText=> JobStatus
+    GOTO Polling
+    LABEL ClickOnF8
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F8
+    Variables.IncreaseVariable Value: searchCount IncrementValue: 1
+    IF searchCount <= 20 THEN
+        GOTO SearchJobId
+    ELSE
+        DISABLE Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''C:\\Alight\\OneDrive - Alight Solutions\\Desktop\\Power Automate\\Vishwas Power Automate\\Failed_DA_TA0095G0_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+        DISABLE System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+        File.WriteText File: logFilePath TextToWrite: $'''No Job with %JobId% Id found in search results.''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        GOTO 'No Search Result'
+    END
+    LABEL Polling
+    IF IsEmpty(JobStatus) THEN
+        WAIT 10
+        TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+        GOTO SearchJobId
+    END
+    LOOP LoopIndex FROM 1 TO 5 STEP 1
+        IF Contains(ExpectedJobStatus, JobStatus, True) THEN
+            GOTO 'End Polling'
+        ELSE
+            WAIT 15
+            TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+            TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobStatus
+                ON ERROR FieldLabelNotFoundError
+                    CALL SendTransmitKey
+                    THROW ERROR
+                END
+        END
+    END
+    LABEL 'End Polling'
+    DISABLE Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''C:\\Alight\\OneDrive - Alight Solutions\\Desktop\\Power Automate\\Vishwas Power Automate\\DA_TA0095G0_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+    File.WriteText File: logFilePath TextToWrite: $'''BZ Mainframe Status of JobName: %JobName% and JobId: %JobId% is %JobStatus%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    SET BZ_Validation_Status TO True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+    WAIT 3
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    LABEL ClickOnF3
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''ISPF Primary Option Menu''' IsRegEx: False ColumnSize: 80
+        ON ERROR REPEAT 4 TIMES WAIT 10
+        ON ERROR
+            GOTO ClickOnF3
+        END
+    WAIT 2
+    GOTO 'End of Flow'
+END
+ERROR => LastError Reset: True
+File.WriteText File: logFilePath TextToWrite: $'''<<------------------->>
+Last Message for Failed Verification : BZ Mainframe Status of JobName: %JobName% and JobId: %JobId% is %JobStatus%
+Error: %LastError%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+LABEL 'No Search Result'
+SET BZ_Validation_Status TO False
+LABEL 'End of Flow'

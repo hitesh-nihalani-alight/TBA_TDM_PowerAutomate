@@ -1,0 +1,9 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+    THROW ERROR
+END
+    SET CICSClientId TO CurrentRow['SSYSERID']
+    SET SUBTRANS TO CurrentRow['TransSubSys']
+    SET UserId TO CurrentRow['UserId']
+    SET SystemDate TO CurrentRow['SystemDate']
+END

@@ -1,0 +1,33 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+
+END
+    BLOCK 'Update TDM Variable'
+ON BLOCK ERROR
+
+END
+        DateTime.GetCurrentDateTime.Local DateTimeFormat: DateTime.DateTimeFormat.DateAndTime CurrentDateTime=> CurrentDateTime
+        Text.ConvertDateTimeToText.FromDateTime DateTime: CurrentDateTime StandardFormat: Text.WellKnownDateTimeFormat.GeneralDateTimeLongTime Result=> FormattedDateTime
+        Text.Replace Text: FormattedDateTime TextToFind: $'''/''' IsRegEx: False IgnoreCase: False ReplaceWith: $'''_''' ActivateEscapeSequences: False Result=> DateTime
+        Text.Replace Text: DateTime TextToFind: $''':''' IsRegEx: False IgnoreCase: False ReplaceWith: $'''_''' ActivateEscapeSequences: False Result=> DateTime
+        System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''USERNAME''' Value=> machineUser
+        File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\Jenkins_BuildNumber.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> buildNumber
+        SET userPath TO $'''D:\\Users\\%machineUser%'''
+        SET BuildFolderPath TO $'''%userPath%\\screenshots\\%buildNumber%\\'''
+        SET screenshotPath TO $'''%userPath%\\screenshots\\%buildNumber%\\'''
+        SET logFilePath TO $'''%BuildFolderPath%\\Date_%DateTime%_Log_File.txt'''
+        SET TDMFlowStatus TO $'''%BuildFolderPath%\\TDM_E2E_FlowStatus.txt'''
+        Folder.Create FolderPath: BuildFolder.FullName FolderName: screenshotPath Folder=> rowNumberFolder
+        IF (File.IfFile.Exists File: logFilePath) THEN
+            DISABLE File.Delete Files: logFilePath
+        END
+    END
+    File.WriteText File: logFilePath TextToWrite: $'''TDM Flow Execution Started
+********************************************************************************''' AppendNewLine: True IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.UTF8
+    SET screenshotPath TO rowNumberFolder.FullName
+    DISABLE SET racfUsername TO CurrentRow['RACFUSERID']
+    DISABLE File.ConvertFromBase64 Base64Text: CurrentRow['RACFBASE64PASSWORD'] File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' IfFileExists: File.IfExists.Overwrite
+    DISABLE File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> racfPassword
+    DISABLE File.Delete Files: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt'''
+    DISABLE SET encryptedPassword TO CurrentRow['RACFBASE64PASSWORD']
+END

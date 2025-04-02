@@ -1,0 +1,13 @@
+TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+WAIT 2
+TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+WAIT 2
+TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TEST - C I C S - System Menu''' IsRegEx: False Timeout: 2
+TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 3 TreatAtCharacterAsLiteral: True
+TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+WAIT 2
+TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Session Selection''' IsRegEx: False Timeout: 2
+TerminalEmulation.SetTextOnTerminalSession.SetTextOnFieldWithLabel Session: TerminalSession Text: $'''C''' FieldLabel: $'''CICS - STE''' TreatAtCharacterAsLiteral: False
+Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\CICS_Session_Closed.jpg''' ImageFormat: System.ImageFormat.Jpg
+File.WriteText File: logFilePath TextToWrite: $'''CICS TEST Menu Closed''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit

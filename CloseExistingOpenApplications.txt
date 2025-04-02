@@ -1,0 +1,20 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+
+END
+    IF (System.IfProcess.ProcessIsRunning ProcessName: $'''bzmd''') THEN
+        System.TerminateProcess.TerminateProcessByName ProcessName: $'''bzmd'''
+    END
+    IF (System.IfProcess.ProcessIsRunning ProcessName: $'''SiPDM''') THEN
+        System.TerminateProcess.TerminateProcessByName ProcessName: $'''SiPDM'''
+    END
+    IF (System.IfProcess.ProcessIsRunning ProcessName: $'''Catalyst.Shell''') THEN
+        System.TerminateProcess.TerminateProcessByName ProcessName: $'''Catalyst.Shell'''
+    END
+    IF (System.IfProcess.ProcessIsRunning ProcessName: $'''SiBatchLauncher''') THEN
+        System.TerminateProcess.TerminateProcessByName ProcessName: $'''SiBatchLauncher'''
+    END
+    IF (System.IfProcess.ProcessIsRunning ProcessName: $'''WpATEditor''') THEN
+        System.TerminateProcess.TerminateProcessByName ProcessName: $'''WpATEditor'''
+    END
+END
