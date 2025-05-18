@@ -1,0 +1,125 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+
+END
+    SET ExpectedJobStatus TO $'''CC 0004,CC 0001,CC 0000'''
+    System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''USERNAME''' Value=> username
+    # Launching BZ Mainframe Application
+    DISABLE CALL Mainframe_Login_Flow
+    DISABLE TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Session Selection''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnFieldWithLabel Session: TerminalSession Text: $'''S''' FieldLabel: $'''TSO - DEVELOPMENT''' TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    File.WriteText File: logFilePath TextToWrite: $'''TSO - DEVELOPMENT Session Opened''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\TSO_DEVELOPMENT.jpg''' ImageFormat: System.ImageFormat.Jpg
+    BLOCK 'BZ Validation Block'
+ON BLOCK ERROR all
+
+END
+        SET RowNo TO -1
+        LOOP FOREACH CurrentRow IN tdmExcelData
+            Variables.IncreaseVariable Value: RowNo IncrementValue: 1
+            IF CurrentRow['Column2'] = $'''Y''' THEN
+                BLOCK 'BZ Validation Block'
+ON BLOCK ERROR all
+
+END
+                    SET SSYSERID TO CurrentRow['Column6']
+                    SET JobName TO CurrentRow['Column60']
+                    SET JobId TO CurrentRow['Column61']
+                    SET screenshotPath TO $'''%userPath%\\screenshots\\LiveClients\\%buildNumber%\\%RowNo%_%SSYSERID%'''
+                    File.WriteText File: logFilePath TextToWrite: $'''BZ Job Validation for Row Number %RowNo% and ClientId %SSYSERID%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+                    File.WriteText File: logFilePath TextToWrite: $'''BZ Status Checking for JobName: %JobName% and JobId: %JobId%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+                    IF IsBlank(JobId) THEN
+                        File.WriteText File: logFilePath TextToWrite: $'''Not Validated Job Status due to Job Id is blank.''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+                        GOTO Continue_Validation
+                    END
+                    # Validate Status of JobId
+                    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''ISPF Primary Option Menu''' IsRegEx: False Timeout: 3
+                        ON ERROR REPEAT 5 TIMES WAIT 2
+                        ON ERROR
+                            CALL SendTransmitKey
+                            REPEAT ACTION
+                        END
+                    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''ej st %JobName%''' TreatAtCharacterAsLiteral: True
+                    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+                    WAIT 2
+                    SET searchCount TO 1
+                    LABEL SearchJobId
+                    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Row''' IsRegEx: False Timeout: 2
+                        ON ERROR
+                            CALL SendTransmitKey
+                        END
+                    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: JobId IsRegEx: False ColumnSize: 80 Results=> FindResults
+                        ON ERROR
+                            GOTO ClickOnF8
+                        END
+                    Variables.RetrieveDataTableColumnIntoList DataTable: FindResults ColumnNameOrIndex: $'''Row''' ColumnAsList=> Rows
+                    Variables.RetrieveDataTableColumnIntoList DataTable: FindResults ColumnNameOrIndex: $'''Column''' ColumnAsList=> Columns
+                    Text.ToNumber Text: Rows Number=> Rows
+                    Text.ToNumber Text: Columns Number=> Columns
+                    SET Columns TO Columns + 46
+                    TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobStatus
+                        ON ERROR FieldLabelNotFoundError
+                            CALL SendTransmitKey
+                            THROW ERROR
+                        END
+                    Text.Trim Text: JobStatus TrimOption: Text.TrimOption.Both TrimmedText=> JobStatus
+                    GOTO Polling
+                    LABEL ClickOnF8
+                    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F8
+                    Variables.IncreaseVariable Value: searchCount IncrementValue: 1
+                    IF searchCount <= 20 THEN
+                        GOTO SearchJobId
+                    ELSE
+                        System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+                        EXIT Code: 0 ErrorMessage: $'''No Job with %JobId% Id found in search results.'''
+                    END
+                    LABEL Polling
+                    IF IsEmpty(JobStatus) THEN
+                        WAIT 10
+                        TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+                        GOTO SearchJobId
+                    END
+                    LOOP LoopIndex FROM 1 TO 5 STEP 1
+                        IF Contains(ExpectedJobStatus, JobStatus, True) THEN
+                            GOTO 'End Polling'
+                        ELSE
+                            WAIT 15
+                            TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+                            TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobStatus
+                                ON ERROR FieldLabelNotFoundError
+                                    CALL SendTransmitKey
+                                    THROW ERROR
+                                END
+                        END
+                    END
+                    LABEL 'End Polling'
+                    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+                    File.WriteText File: logFilePath TextToWrite: $'''JobStatus: %JobStatus%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+                    Variables.ModifyDataTableItem DataTable: ExcelDataExtractMgt ColumnNameOrIndex: 25 RowIndex: RowNo Value: JobStatus
+                        ON ERROR
+
+                        END
+                    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+                    WAIT 2
+                    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+                    GOTO Continue_Validation
+                END
+                ERROR => LastError Reset: True
+                File.WriteText File: logFilePath TextToWrite: $'''Error in Validating Job Status for JobName: %JobName%
+Error: %LastError%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+                LABEL Continue_Validation
+            END
+        END
+    END
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.CloseSession Session: TerminalSession
+    System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+    GOTO End_BZ_Validation
+END
+Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\Failed_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+ERROR => LastError Reset: True
+File.WriteText File: logFilePath TextToWrite: $'''Error in Validating Job Status.
+Error: %LastError%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+LABEL End_BZ_Validation

@@ -1,0 +1,24 @@
+BLOCK 'Launch and update Excel'
+ON BLOCK ERROR
+
+END
+    File.WriteText File: logFilePath TextToWrite: $'''
+-----------------------------------------------------------------------------------Start writing the date to Output Excel File
+
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''D:\\Users\\%machineUser%\\Jenkins_Workspace\\PowerAutomateScripts\\Output_TDM_Flow_Data.xlsx''' Visible: False ReadOnly: False Instance=> tdmFlowData
+    Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: tdmFlowData Name: $'''TDM_DATA'''
+    Excel.WriteToExcel.WriteCell Instance: tdmFlowData Value: tdmExcelData Column: $'''A''' Row: 2
+    Excel.CloseExcel.CloseAndSave Instance: tdmFlowData
+    File.Copy Files: $'''%userPath%\\Jenkins_Workspace\\PowerAutomateScripts\\New_TDM_Flow_Data_Output.xlsx''' Destination: BuildFolder IfFileExists: File.IfExists.Overwrite CopiedFiles=> CopiedFiles
+    File.WriteText File: logFilePath TextToWrite: $'''
+End of writing the date to Output Excel File
+
+-----------------------------------------------------------------------------------
+
+
+
+''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+END

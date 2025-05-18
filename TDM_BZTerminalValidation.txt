@@ -1,0 +1,108 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR all
+
+END
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''ISPF Primary Option Menu''' IsRegEx: False Timeout: 3
+        ON ERROR REPEAT 25 TIMES WAIT 2
+        ON ERROR
+            CALL SendTransmitKey
+            THROW ERROR
+        END
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''ej st %JobName%''' TreatAtCharacterAsLiteral: True
+    WAIT 3
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    SET searchCount TO 1
+    LABEL SearchJobId
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Row''' IsRegEx: False Timeout: 2
+        ON ERROR
+            CALL SendTransmitKey
+        END
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: JobId IsRegEx: False ColumnSize: 80 Results=> FindResults
+        ON ERROR
+            GOTO ClickOnF8
+        END
+    Variables.RetrieveDataTableColumnIntoList DataTable: FindResults ColumnNameOrIndex: $'''Row''' ColumnAsList=> Rows
+    Variables.RetrieveDataTableColumnIntoList DataTable: FindResults ColumnNameOrIndex: $'''Column''' ColumnAsList=> Columns
+    Text.ToNumber Text: Rows Number=> Rows
+        ON ERROR
+            CALL SendTransmitKey
+            GOTO SearchJobId
+        END
+    Text.ToNumber Text: Columns Number=> Columns
+    TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobId_Backend
+        ON ERROR FieldLabelNotFoundError
+            CALL SendTransmitKey
+            THROW ERROR
+        ON ERROR
+
+        END
+    SET Columns TO Columns + 46
+    TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobStatus
+        ON ERROR FieldLabelNotFoundError
+            CALL SendTransmitKey
+            THROW ERROR
+        END
+    Text.Trim Text: JobStatus TrimOption: Text.TrimOption.Both TrimmedText=> JobStatus
+    GOTO Polling
+    LABEL ClickOnF8
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F8
+    Variables.IncreaseVariable Value: searchCount IncrementValue: 1
+    IF searchCount <= 20 THEN
+        GOTO SearchJobId
+    ELSE
+        Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\Failed_%flowName%_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+        DISABLE System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+        File.WriteText File: logFilePath TextToWrite: $'''No Job with %JobId% Id found in search results.''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        GOTO 'No Search Result'
+    END
+    LABEL Polling
+    IF IsEmpty(JobStatus) THEN
+        WAIT 10
+        TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+        GOTO SearchJobId
+    END
+    LOOP LoopIndex FROM 1 TO 5 STEP 1
+        IF Contains(ExpectedJobStatus, JobStatus, True) THEN
+            GOTO 'End Polling'
+        ELSE
+            WAIT 15
+            TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+            TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobStatus
+                ON ERROR FieldLabelNotFoundError
+                    CALL SendTransmitKey
+                    THROW ERROR
+                END
+        END
+    END
+    LABEL 'End Polling'
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\%flowName%_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+    File.WriteText File: logFilePath TextToWrite: $'''BZ Mainframe Status of JobName: %JobName% and JobId: %JobId% is %JobStatus%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    DISABLE TerminalEmulation.CloseSession Session: TerminalSession
+    DISABLE System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+    SET BZ_Validation_Status TO True
+    GOTO 'End of Flow'
+END
+IF (System.IfProcess.ProcessIsRunning ProcessName: $'''RocketTE''') THEN
+    ERROR => LastError Reset: True
+    File.WriteText File: logFilePath TextToWrite: $'''Failed: BZ Mainframe Status of JobName: %JobName% and JobId: %JobId% is %JobStatus%
+Error: %LastError%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\Failed_%flowName%_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+    DISABLE System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+END
+LABEL 'No Search Result'
+SET BZ_Validation_Status TO False
+LABEL 'End of Flow'
+TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+WAIT 3
+TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+LABEL ClickOnF3
+TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''ISPF Primary Option Menu''' IsRegEx: False ColumnSize: 80
+    ON ERROR REPEAT 5 TIMES WAIT 6
+    ON ERROR
+        GOTO ClickOnF3
+    END
+WAIT 2
