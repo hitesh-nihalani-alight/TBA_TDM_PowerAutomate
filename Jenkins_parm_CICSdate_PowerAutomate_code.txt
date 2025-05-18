@@ -1,0 +1,212 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+    THROW ERROR
+END
+    System.GetEnvironmentVariable.GetEnvironmentVariable Name: $'''USERNAME''' Value=> machineUser
+    SET userPath TO $'''D:\\Users\\%machineUser%'''
+    SET screenshotPath TO $'''%userPath%\\screenshots\\CICSDate'''
+    SET excelFilePath TO $'''D:\\Users\\%machineUser%\\RPA_Automation\\TDM\\CICSDate'''
+    File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\Jenkins_BuildNumber.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> buildNumber
+    File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\Jenkins_TestData.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> jenkinsTestData
+    Folder.Create FolderPath: screenshotPath FolderName: buildNumber Folder=> BuildFolder
+    SET screenshotPath TO BuildFolder.FullName
+    SET logFilePath TO $'''%excelFilePath%\\logs\\%buildNumber%_Logs.txt'''
+    IF (File.IfFile.Exists File: logFilePath) THEN
+        File.Delete Files: logFilePath
+    END
+    Text.SplitText.SplitWithDelimiter Text: jenkinsTestData CustomDelimiter: $''';''' IsRegEx: False Result=> testDataList
+    File.WriteText File: logFilePath TextToWrite: $'''TDM CICS Date Update Process Started
+********************************************************************************''' AppendNewLine: True IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.UTF8
+    IF (Folder.IfFolderExists.Exists Path: $'''%screenshotPath%\\%buildNumber%''') THEN
+        Folder.Delete Folder: $'''%screenshotPath%\\%buildNumber%'''
+    END
+    Variables.CreateNewDatatable InputTable: { } DataTable=> readRecordCheck
+    Variables.CreateNewDatatable InputTable: { } DataTable=> readFailedCheck
+    Variables.CreateNewDatatable InputTable: { } DataTable=> dateUpdatedCheck
+    Variables.CreateNewDatatable InputTable: { } DataTable=> FindUpdatedSystemDate
+    SET CLIENTID TO testDataList[0]
+    SET SUBTRANS TO testDataList[1]
+    SET UserId TO testDataList[2]
+    SET SystemDate TO testDataList[3]
+    BLOCK 'Launch Excel and read RACF ID and RACF encrypted Password'
+ON BLOCK ERROR
+
+END
+        Excel.LaunchExcel.LaunchAndOpenUnderExistingProcess Path: $'''D:\\Users\\%machineUser%\\RACF_Login_Details\\RACF_Login_Details.xlsx''' Visible: False ReadOnly: False Instance=> Excel_RACF_Login_Details
+        Excel.SetActiveWorksheet.ActivateWorksheetByName Instance: Excel_RACF_Login_Details Name: $'''RACF_Login_Details'''
+        Excel.ReadFromExcel.ReadAllCells Instance: Excel_RACF_Login_Details ReadAsText: True FirstLineIsHeader: True RangeValue=> RACF_Login_Details
+        Excel.CloseExcel.Close Instance: Excel_RACF_Login_Details
+    END
+    BLOCK 'Read RACF id and encrypted password from excel'
+ON BLOCK ERROR
+
+END
+        LOOP FOREACH CurrentRow IN RACF_Login_Details
+            IF CLIENTID = CurrentRow['ClientID'] THEN
+                SET racfUsername TO CurrentRow['RacfID']
+                SET racfPassword TO CurrentRow['RacfEncryptedPassword']
+            END
+        END
+        IF IsEmpty(racfUsername) THEN
+            File.WriteText File: logFilePath TextToWrite: $'''RACF Username is empty as Client ID does not exits in Excel Sheet.''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+            SET racfUsername TO $'''@D6276'''
+            SET racfPassword TO $'''QXByaTIwMjU='''
+        END
+        File.ConvertFromBase64 Base64Text: racfPassword File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' IfFileExists: File.IfExists.Overwrite
+        File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> racfOrignalPassword
+        File.Delete Files: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt'''
+        File.WriteText File: logFilePath TextToWrite: $'''RACF Username is - %racfUsername%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    END
+    System.RunApplication.RunApplication ApplicationPath: $'''bzmd.exe''' CommandLineArguments: $'''/f \"D:\\Users\\%machineUser%\\AppData\\Roaming\\Bluezone\\Config\\3270SessionA.zmd\"''' WorkingDirectory: $'''C:\\Program Files\\BlueZone\\10.2''' WindowStyle: System.ProcessWindowStyle.Maximized ProcessId=> MainframeSessionA
+    WAIT 15
+    TerminalEmulation.OpenTerminalSession.OpenSession HllapiPath: $'''C:\\Program Files\\BlueZone\\10.2\\ehlapi64.dll''' SessionName: $'''A''' Session=> TerminalSession
+    @@source: 'Recorder'
+UIAutomation.Click.Click Element: appmask['Window \'Session A\'']['Title Bar \'Session A\''] ClickType: UIAutomation.ClickType.LeftClick OffsetX: 43 OffsetY: -2 MousePositionRelativeToElement: UIAutomation.RectangleEdgePoint.MiddleLeft
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''GO''' TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 5
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 1 TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 5
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: racfUsername TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: racfOrignalPassword TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F1
+    WAIT 2
+    File.WriteText File: logFilePath TextToWrite: $'''Login Successful''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Session Selection''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnFieldWithLabel Session: TerminalSession Text: $'''O''' FieldLabel: $'''CICS - STE''' TreatAtCharacterAsLiteral: False
+    File.WriteText File: logFilePath TextToWrite: $'''CICS TEST Menu Session Opened''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\CICS_TEST_MENU.jpg''' ImageFormat: System.ImageFormat.Jpg
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TEST - C I C S - System Menu''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 4 TreatAtCharacterAsLiteral: True
+    File.WriteText File: logFilePath TextToWrite: $'''System Menu Option Selected as - 4''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\SystemMenu.jpg''' ImageFormat: System.ImageFormat.Jpg
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TBA UTILITY MENU''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 14 TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: SUBTRANS TreatAtCharacterAsLiteral: True
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TBA UTILITY MENU''' IsRegEx: False Timeout: 0
+    File.WriteText File: logFilePath TextToWrite: $'''TBA Utility Menu - Trans Entered as %SUBTRANS%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\TBAUtilityMenu.jpg''' ImageFormat: System.ImageFormat.Jpg
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''GLOBAL VARIABLES (BASF902O) ENTRY AND UPDATE''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: SUBTRANS TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: UserId TreatAtCharacterAsLiteral: True
+    File.WriteText File: logFilePath TextToWrite: $'''UserId entered: %UserId%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F1
+    WAIT 5
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''RECORD READ''' IsRegEx: False ColumnSize: 80 Results=> readRecordCheck
+    ON ERROR
+
+    END
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''902O READ FAILED CICS-RESP = NOTFOUND''' IsRegEx: False ColumnSize: 80 Results=> readFailedCheck
+    ON ERROR
+
+    END
+    IF readRecordCheck.RowsCount <> 0 THEN
+        TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''C''' TreatAtCharacterAsLiteral: False
+    END
+    IF readFailedCheck.RowsCount <> 0 THEN
+        TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''A''' TreatAtCharacterAsLiteral: False
+    END
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: SUBTRANS TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: UserId TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: SystemDate TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''******''' TreatAtCharacterAsLiteral: True
+    File.WriteText File: logFilePath TextToWrite: $'''System Date entered as %SystemDate%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\CICSDate_Entered.jpg''' ImageFormat: System.ImageFormat.Jpg
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F5
+    WAIT 2
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''GVAR RECORD''' IsRegEx: False ColumnSize: 80 Results=> dateUpdatedCheck
+    ON ERROR
+
+    END
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\Message_CICSDate.jpg''' ImageFormat: System.ImageFormat.Jpg
+    IF dateUpdatedCheck.RowsCount <> 0 THEN
+        File.WriteText File: logFilePath TextToWrite: $'''CICS Date Added/Updated''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    ELSE
+        File.WriteText File: logFilePath TextToWrite: $'''CICS Date not Added/Updated''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    END
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F1
+    WAIT 2
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: SystemDate IsRegEx: False ColumnSize: 80 Results=> FindUpdatedSystemDate
+    ON ERROR
+
+    END
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\CICSDate_Update_Validation.jpg''' ImageFormat: System.ImageFormat.Jpg
+    WAIT 2
+    IF IsNotEmpty(FindUpdatedSystemDate) THEN
+        File.WriteText File: logFilePath TextToWrite: $'''Entered System Date %SystemDate% is Updated''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    ELSE
+        File.WriteText File: logFilePath TextToWrite: $'''Entered System Date %SystemDate% is not Updated''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    END
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TBA UTILITY MENU''' IsRegEx: False Timeout: 0
+    WAIT 2
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
+    WAIT 2
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''TEST - C I C S - System Menu''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 3 TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Session Selection''' IsRegEx: False Timeout: 0
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnFieldWithLabel Session: TerminalSession Text: $'''C''' FieldLabel: $'''CICS - STE''' TreatAtCharacterAsLiteral: False
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\CICS_Session_Closed.jpg''' ImageFormat: System.ImageFormat.Jpg
+    File.WriteText File: logFilePath TextToWrite: $'''CICS TEST Menu Session Closed
+********************************************************************************''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.CloseSession Session: TerminalSession
+    System.TerminateProcess.TerminateProcessByName ProcessName: $'''RocketTE'''
+    WAIT 2
+    IF (System.IfProcess.ProcessIsRunning ProcessName: $'''RocketTE''') THEN
+        Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%screenshotPath%\\Failed_CICSDate_%CLIENTID%.jpg''' ImageFormat: System.ImageFormat.Jpg
+        ERROR => LastError Reset: True
+        File.WriteText File: logFilePath TextToWrite: $'''Error in CICS Date.
+Error: %LastError%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        System.TerminateProcess.TerminateProcessByName ProcessName: $'''RocketTE'''
+    END
+    File.WriteText File: logFilePath TextToWrite: $'''TDM CICS Date Update Process Ended''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    File.WriteText File: $'''%excelFilePath%\\CICSDate_FlowStatus.txt''' TextToWrite: True AppendNewLine: False IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.Unicode
+    GOTO End_of_Flow
+END
+File.WriteText File: $'''%excelFilePath%\\CICSDate_FlowStatus.txt''' TextToWrite: False AppendNewLine: False IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.Unicode
+LABEL End_of_Flow
+
+# [ControlRepository][PowerAutomateDesktop]
+
+{
+  "ControlRepositorySymbols": [
+    {
+      "IgnoreImagesOnSerialization": false,
+      "Repository": "{\r\n  \"Screens\": [\r\n    {\r\n      \"Controls\": [\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Title Bar\",\r\n          \"InstanceId\": \"61e2f393-5028-45fb-8618-0cb037068aee\",\r\n          \"Name\": \"Title Bar 'Session A'\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"IsDisabledAttribute\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"BCGPRibbonBar:c8130000:8:10003:10\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"IsDisabledAttribute\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"IsDisabledAttribute\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"59399\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"IsDisabledAttribute\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"Session A\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"IsDisabledAttribute\": false,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"IsDisabledAttribute\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Title Bar 'Session A'\",\r\n                  \"Tag\": \"titlebar\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsPlaceholderSelector\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"titlebar\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\f240c40b-9c65-42d0-85a6-e45fdd07d34d.png\"\r\n        }\r\n      ],\r\n      \"Handle\": {\r\n        \"value\": 0\r\n      },\r\n      \"ProcessName\": null,\r\n      \"ScreenShot\": null,\r\n      \"ElementTypeName\": \"Window\",\r\n      \"InstanceId\": \"893a1aa0-1863-4ba8-9e3c-3e237362aa29\",\r\n      \"Name\": \"Window 'Session A'\",\r\n      \"SelectorCount\": 1,\r\n      \"Selectors\": [\r\n        {\r\n          \"CustomSelector\": null,\r\n          \"Elements\": [\r\n            {\r\n              \"Attributes\": [\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"IsDisabledAttribute\": false,\r\n                  \"Name\": \"Class\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"Rocket Terminal Emulator - Main 64bit 10.2\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"IsDisabledAttribute\": false,\r\n                  \"Name\": \"Enabled\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"IsDisabledAttribute\": false,\r\n                  \"Name\": \"Id\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"\"\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"IsDisabledAttribute\": false,\r\n                  \"Name\": \"Name\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"Session A\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": true,\r\n                  \"IsDisabledAttribute\": false,\r\n                  \"Name\": \"Ordinal\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": 0\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"IsDisabledAttribute\": false,\r\n                  \"Name\": \"Process\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"RocketTE\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"IsDisabledAttribute\": false,\r\n                  \"Name\": \"Visible\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                }\r\n              ],\r\n              \"CustomValue\": null,\r\n              \"Ignore\": false,\r\n              \"Name\": \"Window 'Session A'\",\r\n              \"Tag\": \"window\"\r\n            }\r\n          ],\r\n          \"Ignore\": false,\r\n          \"ImageSelector\": null,\r\n          \"IsCustom\": false,\r\n          \"IsImageBased\": false,\r\n          \"IsPlaceholderSelector\": false,\r\n          \"IsWindowsInstance\": false,\r\n          \"Name\": \"Default Selector\",\r\n          \"Properties\": []\r\n        }\r\n      ],\r\n      \"Tag\": \"window\",\r\n      \"ScreenshotPath\": \"controlRepo-screenshots\\\\fd99cabd-3628-4ef6-bd4d-1799fe06f5a6.png\"\r\n    }\r\n  ],\r\n  \"Version\": 1\r\n}",
+      "ImportMetadata": {
+        "DisplayName": "Local computer",
+        "ConnectionString": "",
+        "Type": "Local",
+        "DesktopType": "local"
+      },
+      "Name": "appmask"
+    }
+  ],
+  "ImageRepositorySymbol": {
+    "Repository": "{\r\n  \"Folders\": [],\r\n  \"Images\": [],\r\n  \"Version\": 1\r\n}",
+    "ImportMetadata": {},
+    "Name": "imgrepo"
+  },
+  "ConnectionReferences": []
+}

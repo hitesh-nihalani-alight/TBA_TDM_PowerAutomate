@@ -12,6 +12,18 @@ END
     TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 21 TreatAtCharacterAsLiteral: False
     TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
     TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: $'''(          0 BYTES)''' IsRegEx: False ColumnSize: 80 Results=> zapdone
+        ON ERROR
+
+        END
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''%ClientScreenshotPath%\\ZAP_Update_Validation.jpg''' ImageFormat: System.ImageFormat.Jpg
     WAIT 5
+    IF IsNotEmpty(zapdone) THEN
+        SET ZapStatusComments TO $'''ZAP Completed'''
+        SET ZapStatusValue TO $'''Pass'''
+    ELSE
+        SET ZapStatusComments TO $'''ZAP not completed'''
+        SET ZapStatusValue TO $'''Fail'''
+    END
     TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F3
 END

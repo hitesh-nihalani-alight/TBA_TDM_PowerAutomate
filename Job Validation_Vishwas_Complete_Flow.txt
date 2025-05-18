@@ -1,0 +1,148 @@
+BLOCK 'Beginning of Block'
+ON BLOCK ERROR
+
+END
+    File.WriteText File: logFilePath TextToWrite: $'''Validate Job Status in BZ Mainframe for UDP Job flow''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    SET ExpectedJobStatus TO $'''CC 0004,CC 0001,CC 0000'''
+    DISABLE System.RunApplication.RunApplication ApplicationPath: $'''RocketTE.exe''' CommandLineArguments: $'''/f \"D:\\Users\\AH0136276\\AppData\\Roaming\\BlueZone\\Config\\3270SessionA.zmd\"''' WorkingDirectory: $'''C:\\Program Files\\BlueZone\\10.2''' WindowStyle: System.ProcessWindowStyle.Maximized ProcessId=> MainframeSessionA
+    System.RunApplication.RunApplication ApplicationPath: $'''bzmd.exe''' CommandLineArguments: $'''/f \"D:\\Users\\AH0136276\\AppData\\Roaming\\Bluezone\\Config\\3270SessionA.zmd\"''' WorkingDirectory: $'''C:\\Program Files (x86)\\BlueZone\\7.1''' WindowStyle: System.ProcessWindowStyle.Maximized ProcessId=> MainframeSessionA
+    WAIT 15
+    TerminalEmulation.OpenTerminalSession.OpenSession HllapiPath: $'''C:\\Program Files\\BlueZone\\10.2\\ehlapi64.dll''' SessionName: $'''A''' Session=> TerminalSession
+    UIAutomation.Click.Click Element: appmask['Window \'Session A\'']['Title Bar'] ClickType: UIAutomation.ClickType.LeftClick OffsetX: 32 OffsetY: 3 MousePositionRelativeToElement: UIAutomation.RectangleEdgePoint.MiddleLeft
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Please type \"GO\" and press ENTER''' IsRegEx: False Timeout: 20
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''GO''' TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    File.WriteText File: logFilePath TextToWrite: $'''Able to Intract with BZ Mainframe''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Selection''' IsRegEx: False Timeout: 2
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: 1 TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 5
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''@D6276''' TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: P'AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAPS/88S223UiIK2dry1eobQQAAAACAAAAAAADZgAAwAAAABAAAAAgK656LxRGy5Yes/IscvFWAAAAAASAAACgAAAAEAAAACEky3Wds54omkCbNBLaBNsYAAAAgEJU1mpKxEk7MMcTAFxUbyTWL7QVMYD/FAAAAN+71Oy+1+rL9Is+J62SOBGHyodt' TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 3
+    TerminalEmulation.GetTextFromTerminalSession.GetTextFromFieldWithLabel Session: TerminalSession FieldLabel: $'''TSO - DEVELOPMENT''' Text=> CICSMenuText
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''C''' TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Tab
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''ENTER USERID''' IsRegEx: False Timeout: 2
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''@D6276''' TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Enter LOGON parameters below''' IsRegEx: False Timeout: 2
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: P'AQAAANCMnd8BFdERjHoAwE/Cl+sBAAAAPS/88S223UiIK2dry1eobQQAAAACAAAAAAADZgAAwAAAABAAAABtfoIS/tFEw+RtJ9swDK+yAAAAAASAAACgAAAAEAAAAAHb1Y+GUdS6KSqye6PrkIgYAAAA9AoFRh3wsfdz4ucqTB7aHSTeSGi2BW/gFAAAAAP19yax2xFPZGvNn6fxRZb8rHEB' TreatAtCharacterAsLiteral: False
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''LAST ACCESS''' IsRegEx: False Timeout: 5
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''ISPF Primary Option Menu''' IsRegEx: False Timeout: 3
+        ON ERROR REPEAT 25 TIMES WAIT 2
+        ON ERROR
+            CALL SendTransmitKey
+            THROW ERROR
+        END
+    TerminalEmulation.SetTextOnTerminalSession.SetTextOnCursorPosition Session: TerminalSession Text: $'''ej st %JobName%''' TreatAtCharacterAsLiteral: True
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    WAIT 2
+    SET searchCount TO 1
+    LABEL SearchJobId
+    TerminalEmulation.WaitForTextOnTerminalSession.WaitForTextOnScreen Session: TerminalSession Text: $'''Row''' IsRegEx: False Timeout: 2
+        ON ERROR
+            CALL SendTransmitKey
+        END
+    TerminalEmulation.FindTextFromTerminalSession Session: TerminalSession Text: JobId IsRegEx: False ColumnSize: 80 Results=> FindResults
+        ON ERROR
+            GOTO SearchJobId
+        END
+    Variables.RetrieveDataTableColumnIntoList DataTable: FindResults ColumnNameOrIndex: $'''Row''' ColumnAsList=> Rows
+    Variables.RetrieveDataTableColumnIntoList DataTable: FindResults ColumnNameOrIndex: $'''Column''' ColumnAsList=> Columns
+    Text.ToNumber Text: Rows Number=> Rows
+        ON ERROR
+            CALL SendTransmitKey
+            GOTO SearchJobId
+        END
+    Text.ToNumber Text: Columns Number=> Columns
+    SET Columns TO Columns + 46
+    TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobStatus
+        ON ERROR FieldLabelNotFoundError
+            CALL SendTransmitKey
+            THROW ERROR
+        END
+    Text.Trim Text: JobStatus TrimOption: Text.TrimOption.Both TrimmedText=> JobStatus
+    GOTO Polling
+    LABEL ClickOnF8
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.F8
+    Variables.IncreaseVariable Value: searchCount IncrementValue: 1
+    IF searchCount <= 20 THEN
+        GOTO SearchJobId
+    ELSE
+        Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''C:\\Alight\\OneDrive - Alight Solutions\\Desktop\\Power Automate\\Vishwas Power Automate\\Failed_DA_TA0095G0_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+        System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+        File.WriteText File: logFilePath TextToWrite: $'''No Job with %JobId% Id found in search results.''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+        GOTO 'No Search Result'
+    END
+    LABEL Polling
+    IF IsEmpty(JobStatus) THEN
+        WAIT 10
+        TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+        GOTO SearchJobId
+    END
+    LOOP LoopIndex FROM 1 TO 5 STEP 1
+        IF Contains(ExpectedJobStatus, JobStatus, True) THEN
+            GOTO 'End Polling'
+        ELSE
+            WAIT 15
+            TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+            TerminalEmulation.GetTextFromTerminalSession.GetTextFromPosition Session: TerminalSession TextLength: 8 Row: Rows Column: Columns Text=> JobStatus
+                ON ERROR FieldLabelNotFoundError
+                    CALL SendTransmitKey
+                    THROW ERROR
+                END
+        END
+    END
+    LABEL 'End Polling'
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''C:\\Alight\\OneDrive - Alight Solutions\\Desktop\\Power Automate\\Vishwas Power Automate\\DA_TA0095G0_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+    File.WriteText File: logFilePath TextToWrite: $'''BZ Mainframe Status of JobName: %JobName% and JobId: %JobId% is %JobStatus%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    TerminalEmulation.SendKey Session: TerminalSession ControlKey: TerminalEmulation.ControlKey.Transmit
+    TerminalEmulation.CloseSession Session: TerminalSession
+    System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+    SET BZ_Validation_Status TO True
+    GOTO 'End of Flow'
+END
+IF (System.IfProcess.ProcessIsRunning ProcessName: $'''RocketTE''') THEN
+    ERROR => LastError Reset: True
+    File.WriteText File: logFilePath TextToWrite: $'''Failed: BZ Mainframe Status of JobName: %JobName% and JobId: %JobId% is %JobStatus%
+Error: %LastError%''' AppendNewLine: True IfFileExists: File.IfFileExists.Append Encoding: File.FileEncoding.UTF8
+    Workstation.TakeScreenshot.TakeScreenshotAndSaveToFile File: $'''C:\\Alight\\OneDrive - Alight Solutions\\Desktop\\Power Automate\\Vishwas Power Automate\\Failed_DA_TA0095G0_LatestTerminal.jpg''' ImageFormat: System.ImageFormat.Jpg
+    System.TerminateProcess.TerminateProcessById ProcessId: MainframeSessionA
+END
+LABEL 'No Search Result'
+SET BZ_Validation_Status TO False
+LABEL 'End of Flow'
+
+# [ControlRepository][PowerAutomateDesktop]
+
+{
+  "ControlRepositorySymbols": [
+    {
+      "IgnoreImagesOnSerialization": false,
+      "Repository": "{\r\n  \"Screens\": [\r\n    {\r\n      \"Controls\": [\r\n        {\r\n          \"AutomationProtocol\": \"uia3\",\r\n          \"ScreenShot\": null,\r\n          \"ElementTypeName\": \"Title Bar\",\r\n          \"InstanceId\": \"7074eaff-d2a8-4888-8630-41ff6499674a\",\r\n          \"Name\": \"Title Bar\",\r\n          \"SelectorCount\": 1,\r\n          \"Selectors\": [\r\n            {\r\n              \"CustomSelector\": null,\r\n              \"Elements\": [\r\n                {\r\n                  \"Attributes\": [\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Class\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Enabled\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    },\r\n                    {\r\n                      \"Ignore\": false,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Id\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"TitleBar\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Name\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": \"\"\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": true,\r\n                      \"Name\": \"Ordinal\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": 0\r\n                    },\r\n                    {\r\n                      \"Ignore\": true,\r\n                      \"IsOrdinal\": false,\r\n                      \"Name\": \"Visible\",\r\n                      \"Operation\": \"EqualTo\",\r\n                      \"Value\": true\r\n                    }\r\n                  ],\r\n                  \"CustomValue\": null,\r\n                  \"Ignore\": false,\r\n                  \"Name\": \"Title Bar\",\r\n                  \"Tag\": \"titlebar\"\r\n                }\r\n              ],\r\n              \"Ignore\": false,\r\n              \"ImageSelector\": null,\r\n              \"IsCustom\": false,\r\n              \"IsImageBased\": false,\r\n              \"IsWindowsInstance\": false,\r\n              \"Name\": \"Default Selector\",\r\n              \"Properties\": []\r\n            }\r\n          ],\r\n          \"Tag\": \"titlebar\",\r\n          \"ScreenshotPath\": \"controlRepo-screenshots\\\\5ddb190e-765d-4586-9be3-0e806a811c7f.png\"\r\n        }\r\n      ],\r\n      \"Handle\": {\r\n        \"value\": 0\r\n      },\r\n      \"ProcessName\": null,\r\n      \"ScreenShot\": null,\r\n      \"ElementTypeName\": \"Window\",\r\n      \"InstanceId\": \"8b3fcdc5-34ed-4742-9e9d-41e6907fcaa8\",\r\n      \"Name\": \"Window 'Session A'\",\r\n      \"SelectorCount\": 1,\r\n      \"Selectors\": [\r\n        {\r\n          \"CustomSelector\": null,\r\n          \"Elements\": [\r\n            {\r\n              \"Attributes\": [\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Class\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"BlueZone Mainframe Display  -  S1\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Enabled\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Id\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"\"\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Name\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"Session A\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": true,\r\n                  \"Name\": \"Ordinal\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": 0\r\n                },\r\n                {\r\n                  \"Ignore\": false,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Process\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": \"bzmd\"\r\n                },\r\n                {\r\n                  \"Ignore\": true,\r\n                  \"IsOrdinal\": false,\r\n                  \"Name\": \"Visible\",\r\n                  \"Operation\": \"EqualTo\",\r\n                  \"Value\": true\r\n                }\r\n              ],\r\n              \"CustomValue\": null,\r\n              \"Ignore\": false,\r\n              \"Name\": \"Window 'Session A'\",\r\n              \"Tag\": \"window\"\r\n            }\r\n          ],\r\n          \"Ignore\": false,\r\n          \"ImageSelector\": null,\r\n          \"IsCustom\": false,\r\n          \"IsImageBased\": false,\r\n          \"IsWindowsInstance\": false,\r\n          \"Name\": \"Default Selector\",\r\n          \"Properties\": []\r\n        }\r\n      ],\r\n      \"Tag\": \"window\",\r\n      \"ScreenshotPath\": \"controlRepo-screenshots\\\\1975201b-0891-4f1b-8c1c-02ce5b657245.png\"\r\n    }\r\n  ],\r\n  \"Version\": 1\r\n}",
+      "ImportMetadata": {
+        "DisplayName": "Local computer",
+        "ConnectionString": "",
+        "Type": "Local",
+        "DesktopType": "local"
+      },
+      "Name": "appmask"
+    }
+  ],
+  "ImageRepositorySymbol": {
+    "Repository": "{\r\n  \"Folders\": [],\r\n  \"Images\": [],\r\n  \"Version\": 1\r\n}",
+    "ImportMetadata": {},
+    "Name": "imgrepo"
+  },
+  "ConnectionReferences": []
+}

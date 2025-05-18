@@ -14,17 +14,21 @@ END
         File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\Jenkins_BuildNumber.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> buildNumber
         SET userPath TO $'''D:\\Users\\%machineUser%'''
         SET BuildFolderPath TO $'''%userPath%\\screenshots\\%buildNumber%\\'''
-        SET screenshotPath TO $'''%userPath%\\screenshots\\%buildNumber%\\'''
+        SET screenshotPath TO $'''%userPath%\\screenshots\\'''
         SET logFilePath TO $'''%BuildFolderPath%\\Date_%DateTime%_Log_File.txt'''
         SET TDMFlowStatus TO $'''%BuildFolderPath%\\TDM_E2E_FlowStatus.txt'''
-        Folder.Create FolderPath: BuildFolder.FullName FolderName: screenshotPath Folder=> rowNumberFolder
+        DISABLE Folder.Create FolderPath: BuildFolder.FullName FolderName: screenshotPath Folder=> rowNumberFolder
         IF (File.IfFile.Exists File: logFilePath) THEN
             DISABLE File.Delete Files: logFilePath
         END
+        IF (Folder.IfFolderExists.Exists Path: $'''%screenshotPath%\\%buildNumber%''') THEN
+            Folder.Delete Folder: $'''%screenshotPath%\\%buildNumber%'''
+        END
+        Folder.Create FolderPath: screenshotPath FolderName: buildNumber Folder=> BuildFolder
     END
     File.WriteText File: logFilePath TextToWrite: $'''TDM Flow Execution Started
 ********************************************************************************''' AppendNewLine: True IfFileExists: File.IfFileExists.Overwrite Encoding: File.FileEncoding.UTF8
-    SET screenshotPath TO rowNumberFolder.FullName
+    DISABLE SET screenshotPath TO rowNumberFolder.FullName
     DISABLE SET racfUsername TO CurrentRow['RACFUSERID']
     DISABLE File.ConvertFromBase64 Base64Text: CurrentRow['RACFBASE64PASSWORD'] File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' IfFileExists: File.IfExists.Overwrite
     DISABLE File.ReadTextFromFile.ReadText File: $'''D:\\Users\\%machineUser%\\RACFBASE64Password.txt''' Encoding: File.TextFileEncoding.UTF8 Content=> racfPassword
